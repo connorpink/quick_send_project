@@ -60,6 +60,30 @@ func CheckBinaryCommand(sendrecvPath string) string {
 	return "command -v " + Quote(sendrecvPath) + " >/dev/null"
 }
 
+func ResolveSendrecvPathCommand(sendrecvPath string) string {
+	if strings.HasPrefix(sendrecvPath, "/") {
+		return fmt.Sprintf("if test -x %s; then printf %s; else printf missing; fi",
+			Quote(sendrecvPath),
+			Quote(sendrecvPath),
+		)
+	}
+
+	candidates := []string{
+		"/home/linuxbrew/.linuxbrew/bin/" + sendrecvPath,
+		"/opt/homebrew/bin/" + sendrecvPath,
+		"/usr/local/bin/" + sendrecvPath,
+	}
+	parts := []string{
+		fmt.Sprintf("resolved=$(command -v %s 2>/dev/null || true)", Quote(sendrecvPath)),
+		"if [ -n \"$resolved\" ]; then printf '%s' \"$resolved\"",
+	}
+	for _, candidate := range candidates {
+		parts = append(parts, fmt.Sprintf("elif test -x %s; then printf %s", Quote(candidate), Quote(candidate)))
+	}
+	parts = append(parts, "else printf missing", "fi")
+	return strings.Join(parts, "; ")
+}
+
 func CheckCommandStatus(command string) string {
 	return fmt.Sprintf("if %s; then printf ok; else printf missing; fi",
 		CheckBinaryCommand(command),

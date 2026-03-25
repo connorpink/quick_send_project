@@ -21,14 +21,21 @@ If remote `sendrecv` is missing, archive-mode `send` can still work:
 
 ## Binary release
 
-Download the archive for your OS and architecture from the GitHub Releases page:
+Download the latest archive for your OS and architecture directly from the latest GitHub release:
 
 ```bash
-curl -LO https://github.com/connorpink/quick_send_project/releases/download/v0.1.0/sendrecv_v0.1.0_Darwin_arm64.tar.gz
-tar -xzf sendrecv_v0.1.0_Darwin_arm64.tar.gz
+curl -LO https://github.com/connorpink/quick_send_project/releases/latest/download/sendrecv_Darwin_arm64.tar.gz
+tar -xzf sendrecv_Darwin_arm64.tar.gz
 chmod +x sendrecv
 ./sendrecv --help
 ```
+
+Example archive names:
+
+- macOS Apple Silicon: `sendrecv_Darwin_arm64.tar.gz`
+- macOS Intel: `sendrecv_Darwin_x86_64.tar.gz`
+- Linux x86_64: `sendrecv_Linux_x86_64.tar.gz`
+- Linux arm64: `sendrecv_Linux_arm64.tar.gz`
 
 ## Homebrew
 
@@ -62,10 +69,8 @@ The local machine needs:
 
 - `ssh`
 - `rsync`
-- `tar`
-- `xz`
 
-Remote archive extraction also expects `tar` and `xz` on the target host.
+Remote archive extraction also expects sendrecv binary on the target host. If binary not found, will fall back to tar and xz for unpacking `tar` and `xz` on the target host. If no method of unpacking is found, it will send the archive as is.
 
 If any runtime dependency is missing after installation, run:
 

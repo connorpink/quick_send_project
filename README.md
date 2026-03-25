@@ -1,5 +1,9 @@
 # sendrecv
 
+[![GitHub Release](https://img.shields.io/github/v/release/connorpink/quick_send_project?sort=semver)](https://github.com/connorpink/quick_send_project/releases)
+[![Homebrew Tap](https://img.shields.io/badge/homebrew-tap-success?logo=homebrew)](https://github.com/connorpink/homebrew-tap)
+[![Release Downloads](https://img.shields.io/github/downloads/connorpink/quick_send_project/latest/total?label=release%20downloads)](https://github.com/connorpink/quick_send_project/releases/latest)
+
 `sendrecv` is a Go CLI for repeat SSH-based file transfer between known devices. It keeps the transfer workflow in one binary while relying on `ssh` and `rsync` only at runtime.
 
 ## Status
@@ -44,7 +48,7 @@ The local machine needs:
 
 The local machine needs `ssh` and `rsync`, and the remote machine also needs `rsync` because transfers run through remote `rsync` over SSH.
 
-For archive-mode `recv`, the remote machine must also have a compatible `sendrecv` binary available on `PATH` or at the configured `sendrecv_path`.
+For archive-mode `recv`, the remote machine must also have a compatible `sendrecv` binary available on `PATH`, in a standard Homebrew location, or at the configured `sendrecv_path`.
 
 For archive-mode `send`, remote `sendrecv` is optional:
 

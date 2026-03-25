@@ -187,6 +187,7 @@ func (r Runner) SendPlan(host *config.ResolvedHost, paths []string, opts Transfe
 	remoteArchive := sendArchivePath(host, extract, opts.KeepArchive)
 	probe := r.remoteProbe()
 	var capabilities doctor.RemoteCapabilities
+	sendrecvPath := host.SendrecvPath
 	if extract && !r.Exec.DryRun {
 		capabilities, err = probe(context.Background(), r.Config, host)
 		if err != nil {
@@ -200,6 +201,9 @@ func (r Runner) SendPlan(host *config.ResolvedHost, paths []string, opts Transfe
 		}
 		if !capabilities.RemoteTempDirOK {
 			return nil, fmt.Errorf("remote_temp_dir %s is not accessible on %s", host.RemoteTempDir, host.SSHTarget)
+		}
+		if capabilities.SendrecvPath != "" {
+			sendrecvPath = capabilities.SendrecvPath
 		}
 		if !capabilities.SendrecvOK && !(capabilities.TarOK && capabilities.GzipOK) {
 			remoteArchive = path.Join(host.RemoteDir, remote.ArchiveFileName)
@@ -219,7 +223,7 @@ func (r Runner) SendPlan(host *config.ResolvedHost, paths []string, opts Transfe
 		} else {
 			if capabilities.SendrecvOK {
 				operations = append(operations, CommandOperation{
-					Command: sshCommand(r.Config, host, remote.UnpackCommand(host.SendrecvPath, remoteArchive, host.RemoteDir, opts.KeepArchive)),
+					Command: sshCommand(r.Config, host, remote.UnpackCommand(sendrecvPath, remoteArchive, host.RemoteDir, opts.KeepArchive)),
 				})
 			} else if capabilities.TarOK && capabilities.GzipOK {
 				operations = append(operations,
@@ -262,8 +266,27 @@ func (r Runner) RecvPlan(host *config.ResolvedHost, paths []string, opts Transfe
 	members := relativeRemoteMembers(base, remotePaths)
 	remoteArchive := remote.ArchivePath(host.RemoteTempDir)
 	localArchive := recvArchivePath(cwd, extract, opts.KeepArchive)
+	sendrecvPath := host.SendrecvPath
+	if !r.Exec.DryRun {
+		capabilities, err := r.remoteProbe()(context.Background(), r.Config, host)
+		if err != nil {
+			return nil, fmt.Errorf("remote capability probe failed before archive recv: %w", err)
+		}
+		if !capabilities.RsyncOK {
+			return nil, fmt.Errorf("remote rsync is unavailable on %s", host.SSHTarget)
+		}
+		if !capabilities.SendrecvOK {
+			return nil, fmt.Errorf("remote sendrecv is unavailable on %s", host.SSHTarget)
+		}
+		if !capabilities.RemoteTempDirOK {
+			return nil, fmt.Errorf("remote_temp_dir %s is not accessible on %s", host.RemoteTempDir, host.SSHTarget)
+		}
+		if capabilities.SendrecvPath != "" {
+			sendrecvPath = capabilities.SendrecvPath
+		}
+	}
 	operations := []Operation{
-		CommandOperation{Command: sshCommand(r.Config, host, remote.PackCommand(host.SendrecvPath, remoteArchive, base, members))},
+		CommandOperation{Command: sshCommand(r.Config, host, remote.PackCommand(sendrecvPath, remoteArchive, base, members))},
 		CommandOperation{Command: rsyncCommand(r.Config, host, host.SSHTarget+":"+remoteArchive, localArchive)},
 		CommandOperation{Command: sshCommand(r.Config, host, remote.CleanupCommand(remoteArchive))},
 	}

@@ -143,7 +143,17 @@ func TestSendPlanUploadsArchiveToRemoteDirWhenNoExtractorExists(t *testing.T) {
 func TestRecvPlanIncludesExtractAndCleanup(t *testing.T) {
 	cfg := testConfig()
 	host, _ := cfg.ResolveHost("box")
-	runner := Runner{Config: cfg}
+	runner := Runner{
+		Config: cfg,
+		RemoteProbe: func(context.Context, *config.Config, *config.ResolvedHost) (doctor.RemoteCapabilities, error) {
+			return doctor.RemoteCapabilities{
+				RsyncOK:         true,
+				SendrecvOK:      true,
+				SendrecvPath:    "/home/linuxbrew/.linuxbrew/bin/sendrecv",
+				RemoteTempDirOK: true,
+			}, nil
+		},
+	}
 	plan, err := runner.RecvPlan(host, []string{"nested/file.txt"}, TransferOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -153,6 +163,9 @@ func TestRecvPlanIncludesExtractAndCleanup(t *testing.T) {
 	}
 	if got := plan.Operations[0].Display(); !strings.Contains(got, "pack --output") {
 		t.Fatalf("missing remote pack command: %s", got)
+	}
+	if got := plan.Operations[0].Display(); !strings.Contains(got, "/home/linuxbrew/.linuxbrew/bin/sendrecv") {
+		t.Fatalf("missing resolved remote sendrecv path: %s", got)
 	}
 	if got := plan.Operations[3].Display(); !strings.Contains(got, "unpack --archive") {
 		t.Fatalf("missing local unpack operation: %s", got)
@@ -172,6 +185,46 @@ func TestRecvPlanForRawFileUsesRsyncOnly(t *testing.T) {
 	}
 	if got := plan.Operations[1].Display(); !strings.Contains(got, "rsync") {
 		t.Fatalf("unexpected operation: %s", got)
+	}
+}
+
+func TestSendPlanUsesResolvedRemoteSendrecvPath(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "README.md")
+	if err := os.WriteFile(file, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := testConfig()
+	host, _ := cfg.ResolveHost("box")
+	runner := Runner{
+		Config: cfg,
+		RemoteProbe: func(context.Context, *config.Config, *config.ResolvedHost) (doctor.RemoteCapabilities, error) {
+			return doctor.RemoteCapabilities{
+				RsyncOK:         true,
+				SendrecvOK:      true,
+				SendrecvPath:    "/home/linuxbrew/.linuxbrew/bin/sendrecv",
+				TarOK:           true,
+				GzipOK:          true,
+				RemoteDirOK:     true,
+				RemoteTempDirOK: true,
+			}, nil
+		},
+	}
+	plan, err := runner.SendPlan(host, []string{file}, TransferOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, operation := range plan.Operations {
+		display := operation.Display()
+		if strings.Contains(display, "/home/linuxbrew/.linuxbrew/bin/sendrecv") &&
+			strings.Contains(display, "unpack --archive") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected unpack command to use resolved remote sendrecv path")
 	}
 }
 
