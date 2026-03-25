@@ -1,0 +1,29 @@
+project_name: sendrecv
+
+builds:
+  - main: ./cmd/sendrecv
+    binary: sendrecv
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format: tar.gz
+
+brews:
+  - repository:
+      owner: your-github-user
+      name: homebrew-tap
+    commit_author:
+      name: sendrecv-bot
+      email: bot@example.com
+    homepage: https://github.com/your-github-user/sendrecv
+    description: Repeat SSH-based file transfer between known devices
+
+release:
+  github:
+    owner: your-github-user
+    name: sendrecv

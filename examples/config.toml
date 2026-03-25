@@ -1,0 +1,22 @@
+[defaults]
+extract = true
+compression = "xz"
+remote_temp_dir = "/tmp/sendrecv"
+rsync_args = ["--archive", "--partial"]
+ssh_args = ["-o", "BatchMode=yes"]
+
+[tools]
+ssh = "ssh"
+rsync = "rsync"
+tar = "tar"
+xz = "xz"
+
+[hosts.laptop]
+ssh_target = "user@laptop"
+remote_dir = "/home/user/Incoming"
+
+[hosts.server]
+ssh_target = "deploy@example"
+remote_dir = "/srv/incoming"
+extract = true
+rsync_args = ["--archive", "--partial", "--info=progress2"]
