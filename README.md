@@ -26,7 +26,7 @@ v1 currently targets macOS and Linux. Windows support, a built-in TUI, and a nat
 
 ## Install
 
-See [docs/install.md](/Users/connorpink/Code/quick_send_project/docs/install.md).
+See [docs/install.md](./docs/install.md).
 
 ## Quick start
 
@@ -87,12 +87,12 @@ This version removes the old `tar`/`xz` runtime model. Existing configs using `t
 
 ## Config
 
-See [docs/config.md](/Users/connorpink/Code/quick_send_project/docs/config.md) and [examples/config.toml](/Users/connorpink/Code/quick_send_project/examples/config.toml).
+See [docs/config.md](./docs/config.md) and [examples/config.toml](./examples/config.toml).
 
 ## Yazi
 
-Yazi is optional. The CLI remains the source of truth and Yazi should call `sendrecv`, not reimplement it. The recommended `g`, `s` integration is plain `sendrecv send`, which will pick a host interactively when needed. See [docs/yazi.md](/Users/connorpink/Code/quick_send_project/docs/yazi.md).
+Yazi is optional. The CLI remains the source of truth and Yazi should call `sendrecv`, not reimplement it. The recommended `g`, `s` integration is plain `sendrecv send`, which will pick a host interactively when needed. See [docs/yazi.md](./docs/yazi.md).
 
 ## Architecture
 
-The package boundaries and transfer flow are documented in [ARCHITECTURE.md](/Users/connorpink/Code/quick_send_project/ARCHITECTURE.md).
+The package boundaries and transfer flow are documented in [ARCHITECTURE.md](.//ARCHITECTURE.md).
