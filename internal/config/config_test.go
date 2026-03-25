@@ -12,7 +12,7 @@ func TestLoadAndResolveHost(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`
 [defaults]
 extract = true
-compression = "xz"
+compression = "gzip"
 remote_temp_dir = "/tmp/sendrecv"
 rsync_args = ["--archive"]
 ssh_args = ["-o", "BatchMode=yes"]
@@ -20,12 +20,11 @@ ssh_args = ["-o", "BatchMode=yes"]
 [tools]
 ssh = "ssh"
 rsync = "rsync"
-tar = "tar"
-xz = "xz"
 
 [hosts.dev]
 ssh_target = "user@dev"
 remote_dir = "/srv/drop"
+sendrecv_path = "/usr/local/bin/sendrecv"
 extract = false
 rsync_args = ["--info=progress2"]
 `), 0o644); err != nil {
@@ -46,6 +45,9 @@ rsync_args = ["--info=progress2"]
 	if host.Extract {
 		t.Fatalf("host override should disable extract")
 	}
+	if host.SendrecvPath != "/usr/local/bin/sendrecv" {
+		t.Fatalf("sendrecv path mismatch: %s", host.SendrecvPath)
+	}
 	if got := len(host.RsyncArgs); got != 2 {
 		t.Fatalf("expected merged rsync args, got %d", got)
 	}
@@ -53,13 +55,37 @@ rsync_args = ["--info=progress2"]
 
 func TestValidateRejectsRelativeRemoteDir(t *testing.T) {
 	cfg := &Config{
-		Defaults: Defaults{Compression: "xz", RemoteTempDir: "/tmp/sendrecv"},
-		Tools:    Tools{SSH: "ssh", RSync: "rsync", Tar: "tar", XZ: "xz"},
+		Defaults: Defaults{Compression: "gzip", RemoteTempDir: "/tmp/sendrecv"},
+		Tools:    Tools{SSH: "ssh", RSync: "rsync"},
 		Hosts: map[string]*Host{
 			"bad": {SSHTarget: "u@h", RemoteDir: "relative"},
 		},
 	}
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("expected validation error")
+	}
+}
+
+func TestLoadRejectsLegacyTarFields(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(path, []byte(`
+[defaults]
+extract = true
+compression = "gzip"
+
+[tools]
+ssh = "ssh"
+rsync = "rsync"
+tar = "tar"
+
+[hosts.dev]
+ssh_target = "user@dev"
+remote_dir = "/srv/drop"
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(path); err == nil {
+		t.Fatal("expected unknown legacy field to fail")
 	}
 }

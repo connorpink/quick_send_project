@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"sendrecv/internal/archive"
 	"sendrecv/internal/config"
 	"sendrecv/internal/doctor"
 	"sendrecv/internal/transport"
@@ -43,6 +45,8 @@ func NewRootCommand() *cobra.Command {
 	cmd.AddCommand(newDoctorCommand(opts))
 	cmd.AddCommand(newSendCommand(opts))
 	cmd.AddCommand(newRecvCommand(opts))
+	cmd.AddCommand(newPackCommand())
+	cmd.AddCommand(newUnpackCommand())
 	cmd.AddCommand(newYaziCommand())
 	return cmd
 }
@@ -127,8 +131,9 @@ func newDoctorCommand(opts *rootOptions) *cobra.Command {
 				if err != nil {
 					return err
 				}
-				check := doctor.RemoteCheck(cmd.Context(), cfg, host)
-				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", check.Name, check.Status, check.Detail)
+				for _, check := range doctor.RemoteChecks(cmd.Context(), cfg, host) {
+					fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", check.Name, check.Status, check.Detail)
+				}
 			}
 			return nil
 		},
@@ -222,6 +227,57 @@ func newYaziCommand() *cobra.Command {
 			fmt.Fprint(cmd.OutOrStdout(), strings.TrimLeft(yazi.ExampleKeymap(args[0]), "\n"))
 		},
 	}
+}
+
+func newPackCommand() *cobra.Command {
+	var output string
+	var base string
+	cmd := &cobra.Command{
+		Use:   "pack --output <archive> --base <dir> <members...>",
+		Short: "Create a gzip-compressed tar archive with Go-native packing",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if output == "" {
+				return fmt.Errorf("--output is required")
+			}
+			if base == "" {
+				return fmt.Errorf("--base is required")
+			}
+			baseDir, err := filepath.Abs(base)
+			if err != nil {
+				return err
+			}
+			return archive.CreateTarGz(baseDir, output, args)
+		},
+	}
+	cmd.Flags().StringVar(&output, "output", "", "archive file path")
+	cmd.Flags().StringVar(&base, "base", "", "base directory for archive members")
+	return cmd
+}
+
+func newUnpackCommand() *cobra.Command {
+	var archivePath string
+	var destination string
+	cmd := &cobra.Command{
+		Use:   "unpack --archive <archive> --dest <dir>",
+		Short: "Extract a gzip-compressed tar archive with Go-native unpacking",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if archivePath == "" {
+				return fmt.Errorf("--archive is required")
+			}
+			if destination == "" {
+				return fmt.Errorf("--dest is required")
+			}
+			destDir, err := filepath.Abs(destination)
+			if err != nil {
+				return err
+			}
+			return archive.ExtractTarGz(archivePath, destDir)
+		},
+	}
+	cmd.Flags().StringVar(&archivePath, "archive", "", "archive file path")
+	cmd.Flags().StringVar(&destination, "dest", "", "absolute destination directory")
+	return cmd
 }
 
 func attachTransferFlags(cmd *cobra.Command, flags *transferFlags) {

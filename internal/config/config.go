@@ -1,11 +1,11 @@
 package config
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	toml "github.com/pelletier/go-toml/v2"
@@ -30,12 +30,11 @@ type Defaults struct {
 type Tools struct {
 	SSH   string `toml:"ssh"`
 	RSync string `toml:"rsync"`
-	Tar   string `toml:"tar"`
-	XZ    string `toml:"xz"`
 }
 
 type Host struct {
 	SSHTarget     string   `toml:"ssh_target"`
+	SendrecvPath  string   `toml:"sendrecv_path"`
 	RemoteDir     string   `toml:"remote_dir"`
 	RemoteTempDir string   `toml:"remote_temp_dir"`
 	Extract       *bool    `toml:"extract"`
@@ -46,6 +45,7 @@ type Host struct {
 type ResolvedHost struct {
 	Name          string
 	SSHTarget     string
+	SendrecvPath  string
 	RemoteDir     string
 	RemoteTempDir string
 	Extract       bool
@@ -65,7 +65,7 @@ func Example() string {
 	return `# sendrecv configuration
 [defaults]
 extract = true
-compression = "xz"
+compression = "gzip"
 remote_temp_dir = "/tmp/sendrecv"
 rsync_args = ["--archive", "--partial"]
 ssh_args = ["-o", "BatchMode=yes"]
@@ -73,16 +73,16 @@ ssh_args = ["-o", "BatchMode=yes"]
 [tools]
 ssh = "ssh"
 rsync = "rsync"
-tar = "tar"
-xz = "xz"
 
 [hosts.laptop]
 ssh_target = "user@laptop"
+sendrecv_path = "sendrecv"
 remote_dir = "/home/user/Incoming"
 remote_temp_dir = "/tmp/sendrecv"
 
 [hosts.media]
 ssh_target = "user@media-box"
+sendrecv_path = "/usr/local/bin/sendrecv"
 remote_dir = "/srv/incoming"
 extract = true
 rsync_args = ["--archive", "--partial", "--info=progress2"]
@@ -95,7 +95,9 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 	var cfg Config
-	if err := toml.Unmarshal(data, &cfg); err != nil {
+	decoder := toml.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
 	cfg.applyDefaults()
@@ -120,19 +122,13 @@ func (c *Config) Validate() error {
 	if c.Defaults.Compression == "" {
 		errs = append(errs, errors.New("defaults.compression is required"))
 	}
-	if c.Defaults.Compression != "xz" {
+	if c.Defaults.Compression != "gzip" {
 		errs = append(errs, fmt.Errorf("unsupported defaults.compression %q", c.Defaults.Compression))
 	}
 	if err := validateTool("tools.ssh", c.Tools.SSH); err != nil {
 		errs = append(errs, err)
 	}
 	if err := validateTool("tools.rsync", c.Tools.RSync); err != nil {
-		errs = append(errs, err)
-	}
-	if err := validateTool("tools.tar", c.Tools.Tar); err != nil {
-		errs = append(errs, err)
-	}
-	if err := validateTool("tools.xz", c.Tools.XZ); err != nil {
 		errs = append(errs, err)
 	}
 
@@ -147,6 +143,9 @@ func (c *Config) Validate() error {
 		}
 		if strings.TrimSpace(host.SSHTarget) == "" {
 			errs = append(errs, fmt.Errorf("host %q must set ssh_target", name))
+		}
+		if host.SendrecvPath != "" && validateCommandPath(host.SendrecvPath) != nil {
+			errs = append(errs, fmt.Errorf("host %q sendrecv_path must be a bare executable name or absolute path", name))
 		}
 		if !filepath.IsAbs(host.RemoteDir) {
 			errs = append(errs, fmt.Errorf("host %q remote_dir must be absolute", name))
@@ -175,6 +174,7 @@ func (c *Config) ResolveHost(name string) (*ResolvedHost, error) {
 	return &ResolvedHost{
 		Name:          name,
 		SSHTarget:     host.SSHTarget,
+		SendrecvPath:  firstNonEmpty(host.SendrecvPath, "sendrecv"),
 		RemoteDir:     host.RemoteDir,
 		RemoteTempDir: remoteTemp,
 		Extract:       extract,
@@ -185,7 +185,7 @@ func (c *Config) ResolveHost(name string) (*ResolvedHost, error) {
 
 func (c *Config) applyDefaults() {
 	if c.Defaults.Compression == "" {
-		c.Defaults.Compression = "xz"
+		c.Defaults.Compression = "gzip"
 	}
 	if c.Defaults.RemoteTempDir == "" {
 		c.Defaults.RemoteTempDir = DefaultRemoteTempDir
@@ -196,20 +196,11 @@ func (c *Config) applyDefaults() {
 	if c.Tools.RSync == "" {
 		c.Tools.RSync = "rsync"
 	}
-	if c.Tools.Tar == "" {
-		c.Tools.Tar = "tar"
-	}
-	if c.Tools.XZ == "" {
-		c.Tools.XZ = "xz"
-	}
 	if c.Defaults.RsyncArgs == nil {
 		c.Defaults.RsyncArgs = []string{"--archive", "--partial"}
 	}
 	if c.Defaults.SSHArgs == nil {
 		c.Defaults.SSHArgs = []string{"-o", "BatchMode=yes"}
-	}
-	if runtime.GOOS == "darwin" && c.Defaults.RemoteTempDir == "" {
-		c.Defaults.RemoteTempDir = DefaultRemoteTempDir
 	}
 }
 
@@ -221,4 +212,23 @@ func validateTool(name, value string) error {
 		return fmt.Errorf("%s must be a bare executable name or absolute path", name)
 	}
 	return nil
+}
+
+func validateCommandPath(value string) error {
+	if value == "" {
+		return nil
+	}
+	if strings.ContainsAny(value, " \t\n") && !filepath.IsAbs(value) {
+		return fmt.Errorf("invalid command path")
+	}
+	return nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
