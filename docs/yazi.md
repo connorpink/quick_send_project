@@ -16,4 +16,5 @@ desc = "Send selection with sendrecv"
 - `"$@"` preserves Yazi multi-select behavior.
 - Keep the host preset in the binding for the fastest workflow.
 - The CLI remains the source of truth for archive, extract, and path-mode decisions.
+- Archive-mode sends from Yazi still require `sendrecv` to be installed on the remote host.
 - A native Lua plugin can be added later without changing the transfer engine.

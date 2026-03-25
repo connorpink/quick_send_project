@@ -1,6 +1,6 @@
 # sendrecv
 
-`sendrecv` is a Go CLI for repeat SSH-based file transfer between known devices. It keeps the transfer workflow in one binary while staying explicit about runtime tools: `ssh`, `rsync`, `tar`, and `xz`.
+`sendrecv` is a Go CLI for repeat SSH-based file transfer between known devices. It keeps the transfer workflow in one binary while relying on `ssh` and `rsync` only at runtime.
 
 ## Status
 
@@ -11,7 +11,7 @@ v1 currently targets macOS and Linux. Windows support, a built-in TUI, and a nat
 - `send` and `recv` subcommands built around host presets
 - TOML config with per-host defaults
 - automatic raw vs archive decision logic
-- `xz` compression for archive transfers
+- Go-native `tar.gz` archive packing and unpacking
 - optional auto-extract on the destination side
 - strip-common-prefix path mode by default
 - opt-in `--preserve-tree`
@@ -41,10 +41,43 @@ The local machine needs:
 
 - `ssh`
 - `rsync`
-- `tar`
-- `xz`
 
-Remote archive extraction also expects `tar` and `xz` on the target host.
+The local machine needs `ssh` and `rsync`, and the remote machine also needs `rsync` because transfers run through remote `rsync` over SSH.
+
+For archive-mode `recv`, the remote machine must also have a compatible `sendrecv` binary available on `PATH` or at the configured `sendrecv_path`.
+
+For archive-mode `send`, remote `sendrecv` is optional:
+
+- if remote `sendrecv` exists and extraction is enabled, the archive is unpacked remotely
+- if remote `sendrecv` is missing but remote `tar` and `gzip` exist, `sendrecv` falls back to shell extraction on the remote host
+- if neither extraction path is available, `sendrecv` uploads the archive directly into `remote_dir` and prints the final archive path
+- raw single-file transfers for incompressible files still work with just `ssh` and `rsync`
+
+## Helper commands
+
+Archive-mode remote execution uses:
+
+- `sendrecv pack --output <archive> --base <dir> <members...>`
+- `sendrecv unpack --archive <archive> --dest <dir>`
+
+These are normal CLI commands and can be called over SSH by another `sendrecv` instance.
+
+## Remote Doctor
+
+`sendrecv doctor --remote <host>` checks:
+
+- remote `rsync`
+- remote `sendrecv`
+- remote `tar`
+- remote `gzip`
+- `remote_dir` readiness
+- `remote_temp_dir` readiness
+
+That makes it possible to see whether the host can do raw transfers only or full archive send/recv flows.
+
+## Migration note
+
+This version removes the old `tar`/`xz` runtime model. Existing configs using `tools.tar`, `tools.xz`, or `compression = "xz"` must be updated.
 
 ## Config
 
