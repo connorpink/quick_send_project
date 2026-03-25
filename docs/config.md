@@ -69,6 +69,14 @@ Archive-mode `recv` requires `sendrecv` on the remote host because remote archiv
 
 Archive-mode `send` prefers `sendrecv` on the remote host for extraction through `sendrecv unpack`.
 
+When `sendrecv_path` is left as the default `sendrecv`, remote detection first checks `command -v sendrecv` and then falls back to common Homebrew install paths:
+
+- `/home/linuxbrew/.linuxbrew/bin/sendrecv`
+- `/opt/homebrew/bin/sendrecv`
+- `/usr/local/bin/sendrecv`
+
+Set `sendrecv_path` explicitly only if the remote binary lives somewhere else.
+
 If remote `sendrecv` is missing and extraction was requested, `sendrecv` falls back in this order:
 
 1. remote `tar` + `gzip` extraction

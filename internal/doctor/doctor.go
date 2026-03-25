@@ -19,6 +19,7 @@ type Check struct {
 type RemoteCapabilities struct {
 	RsyncOK         bool
 	SendrecvOK      bool
+	SendrecvPath    string
 	TarOK           bool
 	GzipOK          bool
 	RemoteDirOK     bool
@@ -66,8 +67,8 @@ func ProbeRemoteCapabilities(ctx context.Context, cfg *config.Config, host *conf
 	command := strings.Join([]string{
 		"printf 'rsync='",
 		remote.CheckCommandStatus("rsync"),
-		"printf '\\nsendrecv='",
-		remote.CheckCommandStatus(host.SendrecvPath),
+		"printf '\\nsendrecv_path='",
+		remote.ResolveSendrecvPathCommand(host.SendrecvPath),
 		"printf '\\ntar='",
 		remote.CheckCommandStatus("tar"),
 		"printf '\\ngzip='",
@@ -93,20 +94,22 @@ func parseRemoteCapabilities(output string) RemoteCapabilities {
 		if !ok {
 			continue
 		}
-		state := value == "ok"
 		switch key {
 		case "rsync":
-			capabilities.RsyncOK = state
-		case "sendrecv":
-			capabilities.SendrecvOK = state
+			capabilities.RsyncOK = value == "ok"
+		case "sendrecv_path":
+			capabilities.SendrecvOK = value != "" && value != "missing"
+			if capabilities.SendrecvOK {
+				capabilities.SendrecvPath = value
+			}
 		case "tar":
-			capabilities.TarOK = state
+			capabilities.TarOK = value == "ok"
 		case "gzip":
-			capabilities.GzipOK = state
+			capabilities.GzipOK = value == "ok"
 		case "remote_dir":
-			capabilities.RemoteDirOK = state
+			capabilities.RemoteDirOK = value == "ok"
 		case "remote_temp_dir":
-			capabilities.RemoteTempDirOK = state
+			capabilities.RemoteTempDirOK = value == "ok"
 		}
 	}
 	return capabilities
