@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -87,5 +88,19 @@ remote_dir = "/srv/drop"
 	}
 	if _, err := Load(path); err == nil {
 		t.Fatal("expected unknown legacy field to fail")
+	}
+}
+
+func TestRenderQuotesHostKeysWhenNeeded(t *testing.T) {
+	cfg := MinimalConfig()
+	cfg.Hosts["linux.server"] = &Host{
+		SSHTarget:     "cpink@linuxserver",
+		SendrecvPath:  "sendrecv",
+		RemoteDir:     "/srv/incoming",
+		RemoteTempDir: "/srv/incoming/tmp",
+	}
+	rendered := cfg.Render()
+	if !strings.Contains(rendered, `[hosts."linux.server"]`) {
+		t.Fatalf("expected quoted host key, got:\n%s", rendered)
 	}
 }
