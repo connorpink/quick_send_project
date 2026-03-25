@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 
 	toml "github.com/pelletier/go-toml/v2"
@@ -62,31 +64,147 @@ func DefaultPath() (string, error) {
 }
 
 func Example() string {
-	return `# sendrecv configuration
-[defaults]
-extract = true
-compression = "gzip"
-remote_temp_dir = "/tmp/sendrecv"
-rsync_args = ["--archive", "--partial"]
-ssh_args = ["-o", "BatchMode=yes"]
+	return DefaultConfig().Render()
+}
 
-[tools]
-ssh = "ssh"
-rsync = "rsync"
+func DefaultConfig() *Config {
+	return &Config{
+		Defaults: Defaults{
+			Extract:       true,
+			Compression:   "gzip",
+			RemoteTempDir: DefaultRemoteTempDir,
+			RsyncArgs:     []string{"--archive", "--partial"},
+			SSHArgs:       []string{"-o", "BatchMode=yes"},
+		},
+		Tools: Tools{
+			SSH:   "ssh",
+			RSync: "rsync",
+		},
+		Hosts: map[string]*Host{
+			"laptop": {
+				SSHTarget:     "user@laptop",
+				SendrecvPath:  "sendrecv",
+				RemoteDir:     "/home/user/Incoming",
+				RemoteTempDir: DefaultRemoteTempDir,
+			},
+			"media": {
+				SSHTarget:    "user@media-box",
+				SendrecvPath: "/usr/local/bin/sendrecv",
+				RemoteDir:    "/srv/incoming",
+				Extract:      boolPtr(true),
+				RsyncArgs:    []string{"--archive", "--partial", "--info=progress2"},
+			},
+		},
+	}
+}
 
-[hosts.laptop]
-ssh_target = "user@laptop"
-sendrecv_path = "sendrecv"
-remote_dir = "/home/user/Incoming"
-remote_temp_dir = "/tmp/sendrecv"
+func MinimalConfig() *Config {
+	return &Config{
+		Defaults: Defaults{
+			Extract:       true,
+			Compression:   "gzip",
+			RemoteTempDir: DefaultRemoteTempDir,
+			RsyncArgs:     []string{"--archive", "--partial"},
+			SSHArgs:       []string{"-o", "BatchMode=yes"},
+		},
+		Tools: Tools{
+			SSH:   "ssh",
+			RSync: "rsync",
+		},
+		Hosts: map[string]*Host{},
+	}
+}
 
-[hosts.media]
-ssh_target = "user@media-box"
-sendrecv_path = "/usr/local/bin/sendrecv"
-remote_dir = "/srv/incoming"
-extract = true
-rsync_args = ["--archive", "--partial", "--info=progress2"]
-`
+func (c *Config) Render() string {
+	normalized := *c
+	normalized.applyDefaults()
+
+	var b strings.Builder
+	b.WriteString("# sendrecv configuration\n")
+	fmt.Fprintf(&b, "[defaults]\n")
+	fmt.Fprintf(&b, "extract = %t\n", normalized.Defaults.Extract)
+	fmt.Fprintf(&b, "compression = %s\n", quoteString(normalized.Defaults.Compression))
+	fmt.Fprintf(&b, "remote_temp_dir = %s\n", quoteString(normalized.Defaults.RemoteTempDir))
+	fmt.Fprintf(&b, "rsync_args = %s\n", renderStringList(normalized.Defaults.RsyncArgs))
+	fmt.Fprintf(&b, "ssh_args = %s\n\n", renderStringList(normalized.Defaults.SSHArgs))
+
+	fmt.Fprintf(&b, "[tools]\n")
+	fmt.Fprintf(&b, "ssh = %s\n", quoteString(normalized.Tools.SSH))
+	fmt.Fprintf(&b, "rsync = %s\n", quoteString(normalized.Tools.RSync))
+
+	if len(normalized.Hosts) == 0 {
+		b.WriteString("\n# Add host entries like:\n")
+		b.WriteString("# [hosts.laptop]\n")
+		b.WriteString("# ssh_target = \"user@laptop\"\n")
+		b.WriteString("# sendrecv_path = \"sendrecv\"\n")
+		b.WriteString("# remote_dir = \"/home/user/Incoming\"\n")
+		b.WriteString("# remote_temp_dir = \"/home/user/Incoming/tmp\"\n")
+		return b.String()
+	}
+
+	names := make([]string, 0, len(normalized.Hosts))
+	for name := range normalized.Hosts {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		host := normalized.Hosts[name]
+		if host == nil {
+			continue
+		}
+		fmt.Fprintf(&b, "\n[hosts.%s]\n", quoteKey(name))
+		fmt.Fprintf(&b, "ssh_target = %s\n", quoteString(host.SSHTarget))
+		if host.SendrecvPath != "" {
+			fmt.Fprintf(&b, "sendrecv_path = %s\n", quoteString(host.SendrecvPath))
+		}
+		fmt.Fprintf(&b, "remote_dir = %s\n", quoteString(host.RemoteDir))
+		if host.RemoteTempDir != "" {
+			fmt.Fprintf(&b, "remote_temp_dir = %s\n", quoteString(host.RemoteTempDir))
+		}
+		if host.Extract != nil {
+			fmt.Fprintf(&b, "extract = %t\n", *host.Extract)
+		}
+		if len(host.RsyncArgs) > 0 {
+			fmt.Fprintf(&b, "rsync_args = %s\n", renderStringList(host.RsyncArgs))
+		}
+		if len(host.SSHArgs) > 0 {
+			fmt.Fprintf(&b, "ssh_args = %s\n", renderStringList(host.SSHArgs))
+		}
+	}
+	return b.String()
+}
+
+func Write(path string, cfg *Config) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(cfg.Render()), 0o644)
+}
+
+func boolPtr(value bool) *bool {
+	return &value
+}
+
+func quoteString(value string) string {
+	return strconv.Quote(value)
+}
+
+func quoteKey(value string) string {
+	if value != "" && !strings.ContainsAny(value, ".-@/ \t\n\"'") {
+		return value
+	}
+	return quoteString(value)
+}
+
+func renderStringList(values []string) string {
+	if len(values) == 0 {
+		return "[]"
+	}
+	quoted := make([]string, 0, len(values))
+	for _, value := range values {
+		quoted = append(quoted, quoteString(value))
+	}
+	return "[" + strings.Join(quoted, ", ") + "]"
 }
 
 func Load(path string) (*Config, error) {
@@ -108,10 +226,7 @@ func Load(path string) (*Config, error) {
 }
 
 func (c *Config) WriteExample(path string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(path, []byte(Example()), 0o644)
+	return Write(path, DefaultConfig())
 }
 
 func (c *Config) Validate() error {

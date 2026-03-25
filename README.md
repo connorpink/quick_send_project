@@ -13,6 +13,7 @@ v1 currently targets macOS and Linux. Windows support, a built-in TUI, and a nat
 ## Features
 
 - `send` and `recv` subcommands built around host presets
+- interactive host picking in `send`, with `fzf` first and Go fallback
 - TOML config with per-host defaults
 - automatic raw vs archive decision logic
 - Go-native `tar.gz` archive packing and unpacking
@@ -21,7 +22,7 @@ v1 currently targets macOS and Linux. Windows support, a built-in TUI, and a nat
 - opt-in `--preserve-tree`
 - `--dry-run` and `--verbose`
 - `doctor` checks for required tooling
-- documented Yazi shell integration
+- documented Yazi shell integration, including interactive host picking
 
 ## Install
 
@@ -34,8 +35,9 @@ sendrecv config init
 $EDITOR ~/.config/sendrecv/config.toml
 sendrecv config validate
 sendrecv hosts
-sendrecv send laptop file.mp4
-sendrecv send laptop ./dir
+sendrecv send file.mp4
+sendrecv send ./dir
+sendrecv send --remote-host laptop ./dir
 sendrecv recv laptop nested/file.txt
 ```
 
@@ -68,7 +70,7 @@ These are normal CLI commands and can be called over SSH by another `sendrecv` i
 
 ## Remote Doctor
 
-`sendrecv doctor --remote <host>` checks:
+`sendrecv doctor remote <host>` checks:
 
 - remote `rsync`
 - remote `sendrecv`
@@ -89,7 +91,7 @@ See [docs/config.md](/Users/connorpink/Code/quick_send_project/docs/config.md) a
 
 ## Yazi
 
-Yazi is optional. The CLI remains the source of truth and Yazi should call `sendrecv`, not reimplement it. See [docs/yazi.md](/Users/connorpink/Code/quick_send_project/docs/yazi.md).
+Yazi is optional. The CLI remains the source of truth and Yazi should call `sendrecv`, not reimplement it. The recommended `g`, `s` integration is plain `sendrecv send`, which will pick a host interactively when needed. See [docs/yazi.md](/Users/connorpink/Code/quick_send_project/docs/yazi.md).
 
 ## Architecture
 

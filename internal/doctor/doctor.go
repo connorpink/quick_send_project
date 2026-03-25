@@ -3,7 +3,9 @@ package doctor
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"sendrecv/internal/config"
@@ -26,26 +28,61 @@ type RemoteCapabilities struct {
 	RemoteTempDirOK bool
 }
 
-func LocalChecks(cfg *config.Config) []Check {
+func LocalChecks(configPath string) []Check {
+	checks := []Check{ConfigCheck(configPath)}
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		checks = append(checks, Check{Name: "config_parse", Status: "warning", Detail: err.Error()})
+	} else {
+		checks = append(checks, Check{Name: "config_parse", Status: "ok", Detail: "config is valid"})
+		checks = append(checks, HostCountCheck(cfg))
+	}
+
 	tools := []struct {
 		name string
 		path string
 	}{
-		{name: "ssh", path: cfg.Tools.SSH},
-		{name: "rsync", path: cfg.Tools.RSync},
+		{name: "ssh", path: toolPath(cfg, "ssh")},
+		{name: "rsync", path: toolPath(cfg, "rsync")},
+		{name: "fzf", path: "fzf"},
 	}
-	checks := make([]Check, 0, len(tools))
 	for _, tool := range tools {
 		_, err := exec.LookPath(tool.path)
 		status := "ok"
 		detail := "found"
 		if err != nil {
-			status = "missing"
-			detail = err.Error()
+			status = "warning"
+			if tool.name == "fzf" {
+				detail = "not found; Go fuzzy picker fallback will be used"
+			} else {
+				detail = err.Error()
+			}
 		}
 		checks = append(checks, Check{Name: tool.name, Status: status, Detail: detail})
 	}
 	return checks
+}
+
+func ConfigCheck(path string) Check {
+	info, err := os.Stat(path)
+	if err == nil && !info.IsDir() {
+		return Check{Name: "config_path", Status: "ok", Detail: path}
+	}
+	if err != nil && os.IsNotExist(err) {
+		return Check{Name: "config_path", Status: "warning", Detail: fmt.Sprintf("missing config at %s; run `sendrecv config init`", path)}
+	}
+	if err != nil {
+		return Check{Name: "config_path", Status: "warning", Detail: err.Error()}
+	}
+	return Check{Name: "config_path", Status: "warning", Detail: fmt.Sprintf("%s is a directory", path)}
+}
+
+func HostCountCheck(cfg *config.Config) Check {
+	count := len(cfg.Hosts)
+	if count == 0 {
+		return Check{Name: "config_hosts", Status: "warning", Detail: "config has no hosts; `sendrecv send` will not work until you add one"}
+	}
+	return Check{Name: "config_hosts", Status: "ok", Detail: fmt.Sprintf("%d host(s) configured", count)}
 }
 
 func RemoteChecks(ctx context.Context, cfg *config.Config, host *config.ResolvedHost) []Check {
@@ -120,4 +157,76 @@ func statusCheck(name string, ok bool, okDetail string, failDetail string) Check
 		return Check{Name: name, Status: "ok", Detail: okDetail}
 	}
 	return Check{Name: name, Status: "warning", Detail: failDetail}
+}
+
+func YaziChecks() []Check {
+	paths, err := yaziKeymapPaths()
+	if err != nil {
+		return []Check{{Name: "yazi_keymap", Status: "warning", Detail: err.Error()}}
+	}
+
+	checks := make([]Check, 0, len(paths))
+	for _, keymapPath := range paths {
+		info, err := os.Stat(keymapPath)
+		if err == nil && !info.IsDir() {
+			checks = append(checks, Check{Name: "yazi_keymap", Status: "ok", Detail: fmt.Sprintf("found %s", keymapPath)})
+			continue
+		}
+		if err != nil && os.IsNotExist(err) {
+			checks = append(checks, Check{Name: "yazi_keymap", Status: "warning", Detail: fmt.Sprintf("missing %s", keymapPath)})
+			continue
+		}
+		if err != nil {
+			checks = append(checks, Check{Name: "yazi_keymap", Status: "warning", Detail: err.Error()})
+			continue
+		}
+		checks = append(checks, Check{Name: "yazi_keymap", Status: "warning", Detail: fmt.Sprintf("%s is a directory", keymapPath)})
+	}
+	return checks
+}
+
+func toolPath(cfg *config.Config, tool string) string {
+	if cfg == nil {
+		switch tool {
+		case "ssh":
+			return "ssh"
+		case "rsync":
+			return "rsync"
+		}
+		return tool
+	}
+	switch tool {
+	case "ssh":
+		return cfg.Tools.SSH
+	case "rsync":
+		return cfg.Tools.RSync
+	default:
+		return tool
+	}
+}
+
+func yaziKeymapPaths() ([]string, error) {
+	paths := make([]string, 0, 2)
+
+	cfgDir, err := os.UserConfigDir()
+	if err == nil {
+		paths = append(paths, filepath.Join(cfgDir, "yazi", "keymap.toml"))
+	}
+
+	home, homeErr := os.UserHomeDir()
+	if homeErr != nil {
+		if len(paths) > 0 {
+			return paths, nil
+		}
+		return nil, homeErr
+	}
+
+	xdgPath := filepath.Join(home, ".config", "yazi", "keymap.toml")
+	for _, existing := range paths {
+		if existing == xdgPath {
+			return paths, nil
+		}
+	}
+	paths = append(paths, xdgPath)
+	return paths, nil
 }

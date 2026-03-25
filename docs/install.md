@@ -70,7 +70,9 @@ The local machine needs:
 - `ssh`
 - `rsync`
 
-Remote archive extraction also expects sendrecv binary on the target host. If binary not found, will fall back to tar and xz for unpacking `tar` and `xz` on the target host. If no method of unpacking is found, it will send the archive as is.
+For interactive host selection, `fzf` is optional. If it is not installed, `sendrecv` uses its built-in Go fuzzy picker instead.
+
+Remote archive extraction also expects `sendrecv` on the target host. If that binary is not found, `sendrecv` falls back to `tar` and `gzip` on the target host. If no unpacking method is found, it sends the archive as-is.
 
 If any runtime dependency is missing after installation, run:
 

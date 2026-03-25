@@ -7,6 +7,8 @@ The default config path is:
 
 You can override it with `--config` or `SENDRECV_CONFIG`.
 
+`sendrecv config init` tries to import simple concrete hosts from `~/.ssh/config`. If import is unavailable or you select nothing, it writes a starter config and tells you to fill hosts manually.
+
 ## Example
 
 ```toml
@@ -50,6 +52,16 @@ rsync_args = ["--archive", "--partial", "--info=progress2"]
 - `hosts.<name>.extract`: optional per-host override
 - `hosts.<name>.rsync_args`: extra host-specific rsync args
 - `hosts.<name>.ssh_args`: extra host-specific ssh args
+
+## Init workflow
+
+- `sendrecv config init` looks for `~/.ssh/config`.
+- It imports only simple `Host` entries and skips wildcard or `Match` blocks.
+- Imported host names become the TOML host keys.
+- Imported `ssh_target` values are built from `User@HostName`.
+- You are prompted for `remote_dir` for each selected host.
+- `remote_temp_dir` defaults to `<remote_dir>/tmp` during import.
+- After selection, `sendrecv` runs best-effort remote checks and prints any warnings before writing the config.
 
 ## Validation rules
 

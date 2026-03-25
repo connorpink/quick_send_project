@@ -21,6 +21,7 @@ type rootOptions struct {
 	ConfigPath string
 	Verbose    bool
 	DryRun     bool
+	GoFuzzy    bool
 }
 
 type transferFlags struct {
@@ -39,6 +40,7 @@ func NewRootCommand() *cobra.Command {
 	cmd.PersistentFlags().StringVar(&opts.ConfigPath, "config", "", "config file path")
 	cmd.PersistentFlags().BoolVar(&opts.Verbose, "verbose", false, "print commands before running them")
 	cmd.PersistentFlags().BoolVar(&opts.DryRun, "dry-run", false, "print commands without running them")
+	cmd.PersistentFlags().BoolVar(&opts.GoFuzzy, "go-fuzzy", false, "force the Go fuzzy picker even if fzf is installed")
 
 	cmd.AddCommand(newConfigCommand(opts))
 	cmd.AddCommand(newHostsCommand(opts))
@@ -48,6 +50,7 @@ func NewRootCommand() *cobra.Command {
 	cmd.AddCommand(newPackCommand())
 	cmd.AddCommand(newUnpackCommand())
 	cmd.AddCommand(newYaziCommand())
+	cmd.AddCommand(newYaziExampleCommand())
 	return cmd
 }
 
@@ -55,18 +58,9 @@ func newConfigCommand(opts *rootOptions) *cobra.Command {
 	cmd := &cobra.Command{Use: "config", Short: "Manage config"}
 	cmd.AddCommand(&cobra.Command{
 		Use:   "init",
-		Short: "Write an example config file",
+		Short: "Write a config file and optionally import SSH hosts",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			path, err := resolvedConfigPath(opts.ConfigPath)
-			if err != nil {
-				return err
-			}
-			cfg := &config.Config{}
-			if err := cfg.WriteExample(path); err != nil {
-				return err
-			}
-			fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\n", path)
-			return nil
+			return runConfigInit(cmd.OutOrStdout(), cmd.ErrOrStderr(), opts)
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
@@ -111,49 +105,69 @@ func newHostsCommand(opts *rootOptions) *cobra.Command {
 }
 
 func newDoctorCommand(opts *rootOptions) *cobra.Command {
-	var remoteEnabled bool
 	cmd := &cobra.Command{
-		Use:   "doctor [host]",
-		Short: "Check local and optional remote dependencies",
+		Use:   "doctor",
+		Short: "Check local configuration and runtime dependencies",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, _, err := loadConfig(opts.ConfigPath)
+			path, err := resolvedConfigPath(opts.ConfigPath)
 			if err != nil {
 				return err
 			}
-			for _, check := range doctor.LocalChecks(cfg) {
+			for _, check := range doctor.LocalChecks(path) {
 				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", check.Name, check.Status, check.Detail)
-			}
-			if remoteEnabled {
-				if len(args) != 1 {
-					return fmt.Errorf("doctor --remote requires exactly one host")
-				}
-				host, err := cfg.ResolveHost(args[0])
-				if err != nil {
-					return err
-				}
-				for _, check := range doctor.RemoteChecks(cmd.Context(), cfg, host) {
-					fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", check.Name, check.Status, check.Detail)
-				}
 			}
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&remoteEnabled, "remote", false, "run remote checks for the given host")
-	return cmd
-}
-
-func newSendCommand(opts *rootOptions) *cobra.Command {
-	flags := &transferFlags{}
-	cmd := &cobra.Command{
-		Use:   "send <host> <paths...>",
-		Short: "Send local files to a configured host",
-		Args:  cobra.MinimumNArgs(2),
+	cmd.AddCommand(&cobra.Command{
+		Use:   "remote <host>",
+		Short: "Check remote host capabilities",
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, _, err := loadConfig(opts.ConfigPath)
 			if err != nil {
 				return err
 			}
 			host, err := cfg.ResolveHost(args[0])
+			if err != nil {
+				return err
+			}
+			for _, check := range doctor.RemoteChecks(cmd.Context(), cfg, host) {
+				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", check.Name, check.Status, check.Detail)
+			}
+			return nil
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use:   "yazi",
+		Short: "Check Yazi integration and print the recommended keymap snippet",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			for _, check := range doctor.YaziChecks() {
+				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", check.Name, check.Status, check.Detail)
+			}
+			fmt.Fprintln(cmd.OutOrStdout())
+			fmt.Fprintln(cmd.OutOrStdout(), "Add the following snippet to your Yazi keymap file to enable interactive sendrecv host selection:")
+			fmt.Fprintln(cmd.OutOrStdout())
+			fmt.Fprint(cmd.OutOrStdout(), strings.TrimLeft(yazi.ExamplePickerKeymap(), "\n"))
+			return nil
+		},
+	})
+	return cmd
+}
+
+func newSendCommand(opts *rootOptions) *cobra.Command {
+	flags := &transferFlags{}
+	var remoteHost string
+	cmd := &cobra.Command{
+		Use:   "send <paths...>",
+		Short: "Send local files to a configured host",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, _, err := loadConfig(opts.ConfigPath)
+			if err != nil {
+				return err
+			}
+			host, err := selectSendHost(cmd.Context(), cfg, remoteHost, opts, cmd.ErrOrStderr())
 			if err != nil {
 				return err
 			}
@@ -166,16 +180,18 @@ func newSendCommand(opts *rootOptions) *cobra.Command {
 					Stderr:  cmd.ErrOrStderr(),
 				},
 			}
-			plan, err := runner.SendPlan(host, args[1:], transferOptions(flags))
+			plan, err := runner.SendPlan(host, args, transferOptions(flags))
 			if err != nil {
 				return err
 			}
 			if opts.Verbose || opts.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "# selected host: %s\n", host.Name)
 				fmt.Fprintf(cmd.OutOrStdout(), "# %s\n", plan.Summary)
 			}
 			return runner.Execute(context.Background(), plan)
 		},
 	}
+	cmd.Flags().StringVar(&remoteHost, "remote-host", "", "configured host name to use without interactive selection")
 	attachTransferFlags(cmd, flags)
 	return cmd
 }
@@ -219,14 +235,59 @@ func newRecvCommand(opts *rootOptions) *cobra.Command {
 }
 
 func newYaziCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "yazi-example [host]",
+	cmd := &cobra.Command{
+		Use:   "yazi",
+		Short: "Helpers for Yazi integration",
+	}
+	cmd.AddCommand(newYaziSnippetCommand())
+	return cmd
+}
+
+func newYaziSnippetCommand() *cobra.Command {
+	var picker bool
+	cmd := &cobra.Command{
+		Use:   "snippet [host]",
 		Short: "Print an example Yazi keymap snippet",
-		Args:  cobra.ExactArgs(1),
+		Args: func(cmd *cobra.Command, args []string) error {
+			if picker {
+				return cobra.NoArgs(cmd, args)
+			}
+			return cobra.ExactArgs(1)(cmd, args)
+		},
 		Run: func(cmd *cobra.Command, args []string) {
+			if picker {
+				fmt.Fprint(cmd.OutOrStdout(), strings.TrimLeft(yazi.ExamplePickerKeymap(), "\n"))
+				return
+			}
 			fmt.Fprint(cmd.OutOrStdout(), strings.TrimLeft(yazi.ExampleKeymap(args[0]), "\n"))
 		},
 	}
+	cmd.Flags().BoolVar(&picker, "picker", false, "print the interactive host-picker snippet")
+	return cmd
+}
+
+func newYaziExampleCommand() *cobra.Command {
+	var picker bool
+	cmd := &cobra.Command{
+		Use:    "yazi-example [host]",
+		Short:  "Print an example Yazi keymap snippet",
+		Hidden: true,
+		Args: func(cmd *cobra.Command, args []string) error {
+			if picker {
+				return cobra.NoArgs(cmd, args)
+			}
+			return cobra.ExactArgs(1)(cmd, args)
+		},
+		Run: func(cmd *cobra.Command, args []string) {
+			if picker {
+				fmt.Fprint(cmd.OutOrStdout(), strings.TrimLeft(yazi.ExamplePickerKeymap(), "\n"))
+				return
+			}
+			fmt.Fprint(cmd.OutOrStdout(), strings.TrimLeft(yazi.ExampleKeymap(args[0]), "\n"))
+		},
+	}
+	cmd.Flags().BoolVar(&picker, "picker", false, "print the interactive host-picker snippet")
+	return cmd
 }
 
 func newPackCommand() *cobra.Command {
@@ -320,6 +381,9 @@ func loadConfig(override string) (*config.Config, string, error) {
 		return nil, "", err
 	}
 	cfg, err := config.Load(path)
+	if err != nil && os.IsNotExist(err) {
+		return nil, path, fmt.Errorf("config not found at %s; run `sendrecv config init`", path)
+	}
 	return cfg, path, err
 }
 
