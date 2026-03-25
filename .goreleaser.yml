@@ -1,7 +1,10 @@
+version: 2
+
 project_name: sendrecv
 
 builds:
-  - main: ./cmd/sendrecv
+  - id: sendrecv
+    main: ./cmd/sendrecv
     binary: sendrecv
     goos:
       - darwin
@@ -11,19 +14,55 @@ builds:
       - arm64
 
 archives:
-  - format: tar.gz
+  - id: release-archive
+    ids:
+      - sendrecv
+    formats:
+      - tar.gz
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else if eq .Arch "arm64" }}arm64
+      {{- else }}{{ .Arch }}{{ end }}
 
 brews:
-  - repository:
-      owner: your-github-user
+  - name: sendrecv
+    ids:
+      - release-archive
+    repository:
+      owner: connorpink
       name: homebrew-tap
-    commit_author:
-      name: sendrecv-bot
-      email: bot@example.com
-    homepage: https://github.com/your-github-user/sendrecv
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/connorpink/quick_send_project
     description: Repeat SSH-based file transfer between known devices
+    license: MIT
+    download_strategy: CurlDownloadStrategy
+    skip_upload: auto
+    dependencies:
+      - name: rsync
+      - name: xz
+
+nfpms:
+  - id: linux-packages
+    package_name: sendrecv
+    ids:
+      - sendrecv
+    formats:
+      - deb
+      - rpm
+    homepage: https://github.com/connorpink/quick_send_project
+    description: Repeat SSH-based file transfer between known devices
+    license: MIT
+    maintainer: Connor Pink
+    bindir: /usr/bin
+    contents:
+      - src: ./LICENSE
+        dst: /usr/share/licenses/sendrecv/LICENSE
 
 release:
   github:
-    owner: your-github-user
-    name: sendrecv
+    owner: connorpink
+    name: quick_send_project
