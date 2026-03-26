@@ -1,4 +1,4 @@
-# sendrecv
+# sendrecv - CLI quick file send/recieve
 
 [![GitHub Release](https://img.shields.io/github/v/release/connorpink/quick_send_project?sort=semver)](https://github.com/connorpink/quick_send_project/releases)
 [![Homebrew Tap](https://img.shields.io/badge/homebrew-tap-success?logo=homebrew)](https://github.com/connorpink/homebrew-tap)
@@ -89,9 +89,6 @@ These are normal CLI commands and can be called over SSH by another `sendrecv` i
 
 That makes it possible to see whether the host can do raw transfers only or full archive send/recv flows.
 
-## Migration note
-
-This version removes the old `tar`/`xz` runtime model. Existing configs using `tools.tar`, `tools.xz`, or `compression = "xz"` must be updated.
 
 ## Config
 
