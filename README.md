@@ -22,7 +22,7 @@ v1 currently targets macOS and Linux. Windows support, a built-in TUI, and a nat
 - opt-in `--preserve-tree`
 - `--dry-run` and `--verbose`
 - `doctor` checks for required tooling
-- documented Yazi shell integration, including interactive host picking
+- documented Yazi integration, including the companion plugin
 
 ## Install
 
@@ -91,7 +91,7 @@ See [docs/config.md](./docs/config.md) and [examples/config.toml](./examples/con
 
 ## Yazi
 
-Yazi is optional. The CLI remains the source of truth and Yazi should call `sendrecv`, not reimplement it. The recommended `g`, `s` integration is plain `sendrecv send`, which will pick a host interactively when needed. See [docs/yazi.md](./docs/yazi.md).
+Yazi is optional. The CLI remains the source of truth and Yazi should call `sendrecv`, not reimplement it. The recommended path is the companion plugin, [`connorpink/sendrecv`](https://github.com/connorpink/sendrecv), installed with `ya pkg add connorpink/sendrecv`, which chooses a host inside Yazi and launches `sendrecv` as a background task. See [docs/yazi.md](./docs/yazi.md).
 
 ## Architecture
 
