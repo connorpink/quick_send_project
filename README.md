@@ -28,6 +28,14 @@ v1 currently targets macOS and Linux. Windows support and a built-in TUI are out
 
 See [docs/install.md](./docs/install.md).
 
+Simplest install is **Homebrew**
+
+```bash
+brew install connorpink/tap/sendrecv
+```
+
+> Linux deb/rpm and MacOS packages also exist.
+
 ## Quick start
 
 ```bash
