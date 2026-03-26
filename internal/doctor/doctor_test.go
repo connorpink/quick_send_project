@@ -46,3 +46,20 @@ func TestYaziKeymapPathsIncludesXDGFallback(t *testing.T) {
 		t.Fatalf("expected XDG yazi keymap path in %v", paths)
 	}
 }
+
+func TestYaziPluginPathsIncludesPluginMainLua(t *testing.T) {
+	paths, err := yaziPluginPaths("sendrecv.yazi")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, path := range paths {
+		if strings.HasSuffix(path, filepath.Join(".config", "yazi", "plugins", "sendrecv.yazi", "main.lua")) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected plugin main.lua path in %v", paths)
+	}
+}

@@ -1,6 +1,15 @@
 package yazi
 
-func ExampleKeymap(host string) string {
+func ExamplePluginKeymap() string {
+	return `
+[[mgr.prepend_keymap]]
+on = [ "g", "s" ]
+run = "plugin sendrecv"
+desc = "Pick a host and send selection with sendrecv"
+`
+}
+
+func ExampleFixedHostKeymap(host string) string {
 	return `
 [[mgr.prepend_keymap]]
 on = [ "S" ]
@@ -9,7 +18,7 @@ desc = "Send selection with sendrecv"
 `
 }
 
-func ExamplePickerKeymap() string {
+func ExampleShellPickerKeymap() string {
 	return `
 [[mgr.prepend_keymap]]
 on = [ "g", "s" ]

@@ -8,7 +8,7 @@
 
 ## Status
 
-v1 currently targets macOS and Linux. Windows support, a built-in TUI, and a native Yazi Lua plugin are out of scope for this release.
+v1 currently targets macOS and Linux. Windows support and a built-in TUI are out of scope for this release.
 
 ## Features
 
@@ -91,7 +91,15 @@ See [docs/config.md](./docs/config.md) and [examples/config.toml](./examples/con
 
 ## Yazi
 
-Yazi is optional. The CLI remains the source of truth and Yazi should call `sendrecv`, not reimplement it. The recommended path is the companion plugin, [`connorpink/sendrecv`](https://github.com/connorpink/sendrecv), installed with `ya pkg add connorpink/sendrecv`, which chooses a host inside Yazi and launches `sendrecv` as a background task. See [docs/yazi.md](./docs/yazi.md).
+Yazi is optional. The CLI remains the source of truth and Yazi should call `sendrecv`, not reimplement it.
+
+The recommended path is the companion plugin, [`connorpink/sendrecv`](https://github.com/connorpink/sendrecv):
+
+```bash
+ya pkg add connorpink/sendrecv
+```
+
+The plugin reads hosts from `sendrecv hosts --json`, chooses a host inside Yazi, and launches `sendrecv send --remote-host ...` as a background task. See [docs/yazi.md](./docs/yazi.md).
 
 ## Architecture
 

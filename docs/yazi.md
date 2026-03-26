@@ -26,6 +26,13 @@ Why this is the recommended path:
 - Host selection happens inside Yazi instead of taking over the terminal.
 - `sendrecv` still owns all transfer logic.
 
+The plugin contract with `sendrecv` is intentionally small:
+
+- it reads hosts from `sendrecv hosts --json`
+- it launches transfers with `sendrecv send --remote-host ...`
+
+That keeps the plugin thin and avoids duplicating config or transfer logic.
+
 ## Shell fallback: interactive picker
 
 If you do not want to install the plugin, you can still use a shell binding that prompts through `sendrecv` itself:
@@ -55,6 +62,19 @@ Because the host is already known, this runs as a normal Yazi task and returns y
 ## Notes
 
 - The plugin depends on `sendrecv hosts --json`, so keep `sendrecv` reasonably up to date.
+- The current companion plugin uses `fzf` when available for its richer picker flow and falls back to Yazi-native prompting otherwise.
 - `"$@"` preserves Yazi multi-select behavior for shell bindings.
 - The CLI remains the source of truth for archive, extract, and path-mode decisions.
 - Archive-mode sends from Yazi still require `sendrecv` to be installed on the remote host.
+
+## Helper commands
+
+This repo also exposes two helper commands for Yazi setup:
+
+- `sendrecv doctor yazi`: checks likely keymap/plugin locations and prints the recommended plugin install snippet
+- `sendrecv yazi snippet`: prints the plugin keymap snippet by default
+
+Fallback snippet options:
+
+- `sendrecv yazi snippet --shell-picker`
+- `sendrecv yazi snippet --host laptop`

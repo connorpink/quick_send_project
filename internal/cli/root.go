@@ -164,15 +164,15 @@ func newDoctorCommand(opts *rootOptions) *cobra.Command {
 	})
 	cmd.AddCommand(&cobra.Command{
 		Use:   "yazi",
-		Short: "Check Yazi integration and print the recommended keymap snippet",
+		Short: "Check Yazi integration and print plugin install guidance",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			for _, check := range doctor.YaziChecks() {
 				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", check.Name, check.Status, check.Detail)
 			}
 			fmt.Fprintln(cmd.OutOrStdout())
-			fmt.Fprintln(cmd.OutOrStdout(), "Add the following snippet to your Yazi keymap file to enable interactive sendrecv host selection:")
+			fmt.Fprintln(cmd.OutOrStdout(), "Install the companion plugin with `ya pkg add connorpink/sendrecv`, then add the following snippet to your Yazi keymap file:")
 			fmt.Fprintln(cmd.OutOrStdout())
-			fmt.Fprint(cmd.OutOrStdout(), strings.TrimLeft(yazi.ExamplePickerKeymap(), "\n"))
+			fmt.Fprint(cmd.OutOrStdout(), strings.TrimLeft(yazi.ExamplePluginKeymap(), "\n"))
 			return nil
 		},
 	})
@@ -268,25 +268,26 @@ func newYaziCommand() *cobra.Command {
 }
 
 func newYaziSnippetCommand() *cobra.Command {
-	var picker bool
+	var shellPicker bool
+	var host string
 	cmd := &cobra.Command{
-		Use:   "snippet [host]",
+		Use:   "snippet",
 		Short: "Print an example Yazi keymap snippet",
-		Args: func(cmd *cobra.Command, args []string) error {
-			if picker {
-				return cobra.NoArgs(cmd, args)
-			}
-			return cobra.ExactArgs(1)(cmd, args)
-		},
+		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
-			if picker {
-				fmt.Fprint(cmd.OutOrStdout(), strings.TrimLeft(yazi.ExamplePickerKeymap(), "\n"))
+			if shellPicker {
+				fmt.Fprint(cmd.OutOrStdout(), strings.TrimLeft(yazi.ExampleShellPickerKeymap(), "\n"))
 				return
 			}
-			fmt.Fprint(cmd.OutOrStdout(), strings.TrimLeft(yazi.ExampleKeymap(args[0]), "\n"))
+			if host != "" {
+				fmt.Fprint(cmd.OutOrStdout(), strings.TrimLeft(yazi.ExampleFixedHostKeymap(host), "\n"))
+				return
+			}
+			fmt.Fprint(cmd.OutOrStdout(), strings.TrimLeft(yazi.ExamplePluginKeymap(), "\n"))
 		},
 	}
-	cmd.Flags().BoolVar(&picker, "picker", false, "print the interactive host-picker snippet")
+	cmd.Flags().BoolVar(&shellPicker, "shell-picker", false, "print the blocking shell picker snippet instead of the plugin snippet")
+	cmd.Flags().StringVar(&host, "host", "", "print a fixed-host shell snippet for the given configured host")
 	return cmd
 }
 
@@ -304,13 +305,13 @@ func newYaziExampleCommand() *cobra.Command {
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			if picker {
-				fmt.Fprint(cmd.OutOrStdout(), strings.TrimLeft(yazi.ExamplePickerKeymap(), "\n"))
+				fmt.Fprint(cmd.OutOrStdout(), strings.TrimLeft(yazi.ExampleShellPickerKeymap(), "\n"))
 				return
 			}
-			fmt.Fprint(cmd.OutOrStdout(), strings.TrimLeft(yazi.ExampleKeymap(args[0]), "\n"))
+			fmt.Fprint(cmd.OutOrStdout(), strings.TrimLeft(yazi.ExampleFixedHostKeymap(args[0]), "\n"))
 		},
 	}
-	cmd.Flags().BoolVar(&picker, "picker", false, "print the interactive host-picker snippet")
+	cmd.Flags().BoolVar(&picker, "picker", false, "print the blocking shell picker snippet")
 	return cmd
 }
 

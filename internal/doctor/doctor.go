@@ -160,13 +160,17 @@ func statusCheck(name string, ok bool, okDetail string, failDetail string) Check
 }
 
 func YaziChecks() []Check {
-	paths, err := yaziKeymapPaths()
+	keymapPaths, err := yaziKeymapPaths()
 	if err != nil {
 		return []Check{{Name: "yazi_keymap", Status: "warning", Detail: err.Error()}}
 	}
+	pluginPaths, err := yaziPluginPaths("sendrecv.yazi")
+	if err != nil {
+		return []Check{{Name: "yazi_plugin", Status: "warning", Detail: err.Error()}}
+	}
 
-	checks := make([]Check, 0, len(paths))
-	for _, keymapPath := range paths {
+	checks := make([]Check, 0, len(keymapPaths)+len(pluginPaths))
+	for _, keymapPath := range keymapPaths {
 		info, err := os.Stat(keymapPath)
 		if err == nil && !info.IsDir() {
 			checks = append(checks, Check{Name: "yazi_keymap", Status: "ok", Detail: fmt.Sprintf("found %s", keymapPath)})
@@ -181,6 +185,22 @@ func YaziChecks() []Check {
 			continue
 		}
 		checks = append(checks, Check{Name: "yazi_keymap", Status: "warning", Detail: fmt.Sprintf("%s is a directory", keymapPath)})
+	}
+	for _, pluginPath := range pluginPaths {
+		info, err := os.Stat(pluginPath)
+		if err == nil && !info.IsDir() {
+			checks = append(checks, Check{Name: "yazi_plugin", Status: "ok", Detail: fmt.Sprintf("found %s", pluginPath)})
+			continue
+		}
+		if err != nil && os.IsNotExist(err) {
+			checks = append(checks, Check{Name: "yazi_plugin", Status: "warning", Detail: fmt.Sprintf("missing %s", pluginPath)})
+			continue
+		}
+		if err != nil {
+			checks = append(checks, Check{Name: "yazi_plugin", Status: "warning", Detail: err.Error()})
+			continue
+		}
+		checks = append(checks, Check{Name: "yazi_plugin", Status: "warning", Detail: fmt.Sprintf("%s is a directory", pluginPath)})
 	}
 	return checks
 }
@@ -206,11 +226,34 @@ func toolPath(cfg *config.Config, tool string) string {
 }
 
 func yaziKeymapPaths() ([]string, error) {
-	paths := make([]string, 0, 2)
+	baseDirs, err := yaziConfigDirs()
+	if err != nil {
+		return nil, err
+	}
+	paths := make([]string, 0, len(baseDirs))
+	for _, baseDir := range baseDirs {
+		paths = append(paths, filepath.Join(baseDir, "keymap.toml"))
+	}
+	return paths, nil
+}
 
+func yaziPluginPaths(pluginDir string) ([]string, error) {
+	baseDirs, err := yaziConfigDirs()
+	if err != nil {
+		return nil, err
+	}
+	paths := make([]string, 0, len(baseDirs))
+	for _, baseDir := range baseDirs {
+		paths = append(paths, filepath.Join(baseDir, "plugins", pluginDir, "main.lua"))
+	}
+	return paths, nil
+}
+
+func yaziConfigDirs() ([]string, error) {
+	paths := make([]string, 0, 2)
 	cfgDir, err := os.UserConfigDir()
 	if err == nil {
-		paths = append(paths, filepath.Join(cfgDir, "yazi", "keymap.toml"))
+		paths = append(paths, filepath.Join(cfgDir, "yazi"))
 	}
 
 	home, homeErr := os.UserHomeDir()
@@ -221,7 +264,7 @@ func yaziKeymapPaths() ([]string, error) {
 		return nil, homeErr
 	}
 
-	xdgPath := filepath.Join(home, ".config", "yazi", "keymap.toml")
+	xdgPath := filepath.Join(home, ".config", "yazi")
 	for _, existing := range paths {
 		if existing == xdgPath {
 			return paths, nil
