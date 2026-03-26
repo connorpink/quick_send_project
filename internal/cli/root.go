@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -82,7 +83,8 @@ func newConfigCommand(opts *rootOptions) *cobra.Command {
 }
 
 func newHostsCommand(opts *rootOptions) *cobra.Command {
-	return &cobra.Command{
+	var jsonOutput bool
+	cmd := &cobra.Command{
 		Use:   "hosts",
 		Short: "List configured hosts",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -95,6 +97,20 @@ func newHostsCommand(opts *rootOptions) *cobra.Command {
 				names = append(names, name)
 			}
 			sort.Strings(names)
+			if jsonOutput {
+				payload := make([]hostSummary, 0, len(names))
+				for _, name := range names {
+					host, _ := cfg.ResolveHost(name)
+					payload = append(payload, hostSummary{
+						Name:      name,
+						SSHTarget: host.SSHTarget,
+						RemoteDir: host.RemoteDir,
+					})
+				}
+				encoder := json.NewEncoder(cmd.OutOrStdout())
+				encoder.SetIndent("", "  ")
+				return encoder.Encode(payload)
+			}
 			for _, name := range names {
 				host, _ := cfg.ResolveHost(name)
 				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", name, host.SSHTarget, host.RemoteDir)
@@ -102,6 +118,14 @@ func newHostsCommand(opts *rootOptions) *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "print hosts in JSON format")
+	return cmd
+}
+
+type hostSummary struct {
+	Name      string `json:"name"`
+	SSHTarget string `json:"ssh_target"`
+	RemoteDir string `json:"remote_dir"`
 }
 
 func newDoctorCommand(opts *rootOptions) *cobra.Command {

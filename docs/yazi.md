@@ -1,12 +1,34 @@
 # Yazi Integration
 
-Yazi is optional. The recommended integration is a shell binding that passes the current selection directly to the CLI.
+Yazi is optional. The recommended integration is the companion plugin, [`connorpink/sendrecv`](https://github.com/connorpink/sendrecv), which keeps host selection inside Yazi and launches `sendrecv` as a normal background task.
 
-If you want `g`, `s` to prompt for a host, keep the transfer logic in `sendrecv` and let Yazi act only as the launcher.
+## Recommended plugin
 
-## Interactive picker
+Install the plugin:
 
-Use this when you want `sendrecv` to prompt for the destination host at send time.
+```bash
+ya pkg add connorpink/sendrecv
+```
+
+Add this keymap:
+
+```toml
+[[mgr.prepend_keymap]]
+on = [ "g", "s" ]
+run = "plugin sendrecv"
+desc = "Pick a host and send selection with sendrecv"
+```
+
+Why this is the recommended path:
+
+- Yazi stays open after you launch the transfer.
+- The transfer shows up in Yazi's task manager.
+- Host selection happens inside Yazi instead of taking over the terminal.
+- `sendrecv` still owns all transfer logic.
+
+## Shell fallback: interactive picker
+
+If you do not want to install the plugin, you can still use a shell binding that prompts through `sendrecv` itself:
 
 ```toml
 [[mgr.prepend_keymap]]
@@ -15,13 +37,11 @@ run = 'shell --block --confirm "sendrecv send \"$@\""'
 desc = "Pick a host and send selection with sendrecv"
 ```
 
-This uses `fzf` when available and otherwise falls back to the built-in Go picker. `sendrecv` then runs the normal `send` flow with the chosen host, so archive, extract, and path-mode behavior stay in one place.
+This is flexible, but it blocks Yazi until `sendrecv` exits because the host picker needs terminal control.
 
-This is the most flexible option, but it uses `shell --block` because the host picker needs terminal control. That means Yazi stays suspended until the transfer command exits.
+## Shell fallback: fixed host
 
-## Fixed host keymap
-
-Use this when you mostly send to one machine and want Yazi to return immediately while the transfer runs as a task.
+If you mostly send to one machine, a fixed host binding is still a good simple option:
 
 ```toml
 [[mgr.prepend_keymap]]
@@ -30,14 +50,11 @@ run = 'shell --confirm "sendrecv send --remote-host laptop --extract \"$@\""'
 desc = "Send selection to laptop with sendrecv"
 ```
 
-Because the host is already known, this can run as a normal Yazi shell task instead of a blocking picker flow. That means the job can continue in the background and be viewed from Yazi's task manager.
+Because the host is already known, this runs as a normal Yazi task and returns you to Yazi immediately.
 
 ## Notes
 
-- `"$@"` preserves Yazi multi-select behavior.
-- `shell --block` is important for the interactive picker because terminal control is required.
-- `fzf` is optional; if it is not installed, `sendrecv` falls back to its Go picker.
-- Keep the host preset in the binding if you mostly send to one machine and want the fastest path or background-task behavior.
+- The plugin depends on `sendrecv hosts --json`, so keep `sendrecv` reasonably up to date.
+- `"$@"` preserves Yazi multi-select behavior for shell bindings.
 - The CLI remains the source of truth for archive, extract, and path-mode decisions.
 - Archive-mode sends from Yazi still require `sendrecv` to be installed on the remote host.
-- A native Lua plugin can still be added later, but it should stay a thin shim over the CLI instead of reimplementing transfer behavior.
