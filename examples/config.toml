@@ -17,6 +17,7 @@ remote_dir = "/home/user/Incoming"
 [hosts.server]
 ssh_target = "deploy@example"
 sendrecv_path = "/usr/local/bin/sendrecv"
+remote_rsync_path = "/usr/local/bin/rsync"
 remote_dir = "/srv/incoming"
 extract = true
 rsync_args = ["--archive", "--partial", "--info=progress2"]

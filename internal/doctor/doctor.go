@@ -20,6 +20,8 @@ type Check struct {
 
 type RemoteCapabilities struct {
 	RsyncOK         bool
+	RsyncPath       string
+	RsyncSource     string
 	SendrecvOK      bool
 	SendrecvPath    string
 	TarOK           bool
@@ -90,8 +92,12 @@ func RemoteChecks(ctx context.Context, cfg *config.Config, host *config.Resolved
 	if err != nil {
 		return []Check{{Name: "remote_probe", Status: "warning", Detail: fmt.Sprintf("remote capability probe failed: %v", err)}}
 	}
+	return RemoteChecksFromCapabilities(host, capabilities)
+}
+
+func RemoteChecksFromCapabilities(host *config.ResolvedHost, capabilities RemoteCapabilities) []Check {
 	return []Check{
-		statusCheck("remote_rsync", capabilities.RsyncOK, "remote rsync is available", "remote rsync is missing; transfers will fail"),
+		remoteRsyncCheck(host, capabilities),
 		statusCheck("remote_sendrecv", capabilities.SendrecvOK, "remote sendrecv is available for archive extract/pack", "remote sendrecv is missing; archive recv cannot use remote pack"),
 		statusCheck("remote_tar", capabilities.TarOK, "remote tar is available", "remote tar is missing; shell extract fallback cannot run"),
 		statusCheck("remote_gzip", capabilities.GzipOK, "remote gzip is available", "remote gzip is missing; shell extract fallback cannot run"),
@@ -102,8 +108,7 @@ func RemoteChecks(ctx context.Context, cfg *config.Config, host *config.Resolved
 
 func ProbeRemoteCapabilities(ctx context.Context, cfg *config.Config, host *config.ResolvedHost) (RemoteCapabilities, error) {
 	command := strings.Join([]string{
-		"printf 'rsync='",
-		remote.CheckCommandStatus("rsync"),
+		remote.ProbeRsyncCommand(host.RemoteRsyncPath),
 		"printf '\\nsendrecv_path='",
 		remote.ResolveSendrecvPathCommand(host.SendrecvPath),
 		"printf '\\ntar='",
@@ -132,8 +137,13 @@ func parseRemoteCapabilities(output string) RemoteCapabilities {
 			continue
 		}
 		switch key {
-		case "rsync":
-			capabilities.RsyncOK = value == "ok"
+		case "rsync_path":
+			capabilities.RsyncOK = value != "" && value != "missing"
+			if capabilities.RsyncOK {
+				capabilities.RsyncPath = value
+			}
+		case "rsync_source":
+			capabilities.RsyncSource = value
 		case "sendrecv_path":
 			capabilities.SendrecvOK = value != "" && value != "missing"
 			if capabilities.SendrecvOK {
@@ -150,6 +160,36 @@ func parseRemoteCapabilities(output string) RemoteCapabilities {
 		}
 	}
 	return capabilities
+}
+
+func remoteRsyncCheck(host *config.ResolvedHost, capabilities RemoteCapabilities) Check {
+	if capabilities.RsyncOK {
+		switch capabilities.RsyncSource {
+		case "configured":
+			return Check{
+				Name:   "remote_rsync",
+				Status: "ok",
+				Detail: fmt.Sprintf("remote rsync is available via configured remote_rsync_path %q", host.RemoteRsyncPath),
+			}
+		case "path":
+			return Check{Name: "remote_rsync", Status: "ok", Detail: "remote rsync is available on PATH"}
+		case "fallback":
+			return Check{
+				Name:   "remote_rsync",
+				Status: "ok",
+				Detail: fmt.Sprintf("remote rsync is available at %s (detected outside PATH)", capabilities.RsyncPath),
+			}
+		}
+		return Check{Name: "remote_rsync", Status: "ok", Detail: "remote rsync is available"}
+	}
+	if host != nil && host.RemoteRsyncPath != "" {
+		return Check{
+			Name:   "remote_rsync",
+			Status: "warning",
+			Detail: fmt.Sprintf("configured remote_rsync_path %q is missing or not executable; transfers will fail", host.RemoteRsyncPath),
+		}
+	}
+	return Check{Name: "remote_rsync", Status: "warning", Detail: "remote rsync is missing; install rsync or set remote_rsync_path"}
 }
 
 func statusCheck(name string, ok bool, okDetail string, failDetail string) Check {

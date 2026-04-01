@@ -155,7 +155,16 @@ func runConfigInit(cmdIO io.Writer, errIO io.Writer, opts *rootOptions) error {
 		if err != nil {
 			continue
 		}
-		checks := doctor.RemoteChecks(context.Background(), cfg, resolved)
+		capabilities, err := doctor.ProbeRemoteCapabilities(context.Background(), cfg, resolved)
+		if err != nil {
+			fmt.Fprintf(errIO, "%s/%s\t%s\t%s\n", alias, "remote_probe", "warning", fmt.Sprintf("remote capability probe failed: %v", err))
+			continue
+		}
+		if capabilities.RsyncSource == "fallback" && resolved.RemoteRsyncPath == "" {
+			cfg.Hosts[alias].RemoteRsyncPath = capabilities.RsyncPath
+			resolved.RemoteRsyncPath = capabilities.RsyncPath
+		}
+		checks := doctor.RemoteChecksFromCapabilities(resolved, capabilities)
 		for _, check := range checks {
 			if check.Status == "ok" {
 				continue

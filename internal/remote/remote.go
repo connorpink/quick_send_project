@@ -84,6 +84,36 @@ func ResolveSendrecvPathCommand(sendrecvPath string) string {
 	return strings.Join(parts, "; ")
 }
 
+func ProbeRsyncCommand(remoteRsyncPath string) string {
+	if remoteRsyncPath != "" {
+		if strings.HasPrefix(remoteRsyncPath, "/") {
+			return fmt.Sprintf("if test -x %s; then printf 'rsync_path='; printf %s; printf '\\nrsync_source=configured'; else printf 'rsync_path=missing\\nrsync_source=configured'; fi",
+				Quote(remoteRsyncPath),
+				Quote(remoteRsyncPath),
+			)
+		}
+		return fmt.Sprintf("resolved=$(command -v %s 2>/dev/null || true); if [ -n \"$resolved\" ]; then printf 'rsync_path=%%s\\nrsync_source=configured' \"$resolved\"; else printf 'rsync_path=missing\\nrsync_source=configured'; fi",
+			Quote(remoteRsyncPath),
+		)
+	}
+
+	candidates := []string{
+		"/usr/bin/rsync",
+		"/usr/local/bin/rsync",
+		"/opt/homebrew/bin/rsync",
+		"/home/linuxbrew/.linuxbrew/bin/rsync",
+	}
+	parts := []string{
+		"resolved=$(command -v 'rsync' 2>/dev/null || true)",
+		"if [ -n \"$resolved\" ]; then printf 'rsync_path=%s\\nrsync_source=path' \"$resolved\"",
+	}
+	for _, candidate := range candidates {
+		parts = append(parts, fmt.Sprintf("elif test -x %s; then printf 'rsync_path='; printf %s; printf '\\nrsync_source=fallback'", Quote(candidate), Quote(candidate)))
+	}
+	parts = append(parts, "else printf 'rsync_path=missing\\nrsync_source=missing'", "fi")
+	return strings.Join(parts, "; ")
+}
+
 func CheckCommandStatus(command string) string {
 	return fmt.Sprintf("if %s; then printf ok; else printf missing; fi",
 		CheckBinaryCommand(command),

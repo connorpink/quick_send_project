@@ -389,6 +389,9 @@ func rsyncCommand(cfg *config.Config, host *config.ResolvedHost, source, destina
 
 func rsyncArgs(cfg *config.Config, host *config.ResolvedHost, source, destination string) []string {
 	args := append([]string{}, host.RsyncArgs...)
+	if host.RemoteRsyncPath != "" {
+		args = append(args, "--rsync-path="+host.RemoteRsyncPath)
+	}
 	args = append(args, "-e", strings.TrimSpace(strings.Join(append([]string{cfg.Tools.SSH}, host.SSHArgs...), " ")))
 	args = append(args, source, destination)
 	return args

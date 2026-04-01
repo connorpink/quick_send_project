@@ -26,6 +26,7 @@ rsync = "rsync"
 ssh_target = "user@dev"
 remote_dir = "/srv/drop"
 sendrecv_path = "/usr/local/bin/sendrecv"
+remote_rsync_path = "/usr/local/bin/rsync"
 extract = false
 rsync_args = ["--info=progress2"]
 `), 0o644); err != nil {
@@ -48,6 +49,9 @@ rsync_args = ["--info=progress2"]
 	}
 	if host.SendrecvPath != "/usr/local/bin/sendrecv" {
 		t.Fatalf("sendrecv path mismatch: %s", host.SendrecvPath)
+	}
+	if host.RemoteRsyncPath != "/usr/local/bin/rsync" {
+		t.Fatalf("remote rsync path mismatch: %s", host.RemoteRsyncPath)
 	}
 	if got := len(host.RsyncArgs); got != 2 {
 		t.Fatalf("expected merged rsync args, got %d", got)
@@ -94,13 +98,43 @@ remote_dir = "/srv/drop"
 func TestRenderQuotesHostKeysWhenNeeded(t *testing.T) {
 	cfg := MinimalConfig()
 	cfg.Hosts["linux.server"] = &Host{
-		SSHTarget:     "cpink@linuxserver",
-		SendrecvPath:  "sendrecv",
-		RemoteDir:     "/srv/incoming",
-		RemoteTempDir: "/srv/incoming/tmp",
+		SSHTarget:       "alice@devbox.example",
+		SendrecvPath:    "sendrecv",
+		RemoteRsyncPath: "/usr/local/bin/rsync",
+		RemoteDir:       "/srv/incoming",
+		RemoteTempDir:   "/srv/incoming/tmp",
 	}
 	rendered := cfg.Render()
 	if !strings.Contains(rendered, `[hosts."linux.server"]`) {
 		t.Fatalf("expected quoted host key, got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, `remote_rsync_path = "/usr/local/bin/rsync"`) {
+		t.Fatalf("expected remote_rsync_path in rendered config, got:\n%s", rendered)
+	}
+}
+
+func TestValidateAcceptsBareRemoteRsyncPath(t *testing.T) {
+	cfg := &Config{
+		Defaults: Defaults{Compression: "gzip", RemoteTempDir: "/tmp/sendrecv"},
+		Tools:    Tools{SSH: "ssh", RSync: "rsync"},
+		Hosts: map[string]*Host{
+			"ok": {SSHTarget: "u@h", RemoteDir: "/srv/drop", RemoteRsyncPath: "rsync-custom"},
+		},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected validation success, got %v", err)
+	}
+}
+
+func TestValidateRejectsInvalidRemoteRsyncPath(t *testing.T) {
+	cfg := &Config{
+		Defaults: Defaults{Compression: "gzip", RemoteTempDir: "/tmp/sendrecv"},
+		Tools:    Tools{SSH: "ssh", RSync: "rsync"},
+		Hosts: map[string]*Host{
+			"bad": {SSHTarget: "u@h", RemoteDir: "/srv/drop", RemoteRsyncPath: "bin/rsync custom"},
+		},
+	}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "remote_rsync_path") {
+		t.Fatalf("expected remote_rsync_path validation error, got %v", err)
 	}
 }
