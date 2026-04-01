@@ -32,6 +32,43 @@ func TestSendPlanForRawFile(t *testing.T) {
 	}
 }
 
+func TestSendPlanAddsRemoteRsyncPathWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "video.mp4")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := testConfig()
+	cfg.Hosts["box"].RemoteRsyncPath = "/opt/tools/rsync"
+	host, _ := cfg.ResolveHost("box")
+	runner := Runner{Config: cfg}
+	plan, err := runner.SendPlan(host, []string{file}, TransferOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := plan.Operations[1].Display(); !strings.Contains(got, "--rsync-path=/opt/tools/rsync") {
+		t.Fatalf("expected rsync command to include remote_rsync_path, got %s", got)
+	}
+}
+
+func TestSendPlanOmitsRemoteRsyncPathWhenUnset(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "video.mp4")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := testConfig()
+	host, _ := cfg.ResolveHost("box")
+	runner := Runner{Config: cfg}
+	plan, err := runner.SendPlan(host, []string{file}, TransferOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := plan.Operations[1].Display(); strings.Contains(got, "--rsync-path=") {
+		t.Fatalf("did not expect rsync command to include remote_rsync_path, got %s", got)
+	}
+}
+
 func TestSendPlanDryRunIncludesFallbackNote(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "README.md")

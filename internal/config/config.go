@@ -37,6 +37,7 @@ type Tools struct {
 type Host struct {
 	SSHTarget     string   `toml:"ssh_target"`
 	SendrecvPath  string   `toml:"sendrecv_path"`
+	RemoteRsyncPath string `toml:"remote_rsync_path"`
 	RemoteDir     string   `toml:"remote_dir"`
 	RemoteTempDir string   `toml:"remote_temp_dir"`
 	Extract       *bool    `toml:"extract"`
@@ -48,6 +49,7 @@ type ResolvedHost struct {
 	Name          string
 	SSHTarget     string
 	SendrecvPath  string
+	RemoteRsyncPath string
 	RemoteDir     string
 	RemoteTempDir string
 	Extract       bool
@@ -88,11 +90,12 @@ func DefaultConfig() *Config {
 				RemoteTempDir: DefaultRemoteTempDir,
 			},
 			"media": {
-				SSHTarget:    "user@media-box",
-				SendrecvPath: "/usr/local/bin/sendrecv",
-				RemoteDir:    "/srv/incoming",
-				Extract:      boolPtr(true),
-				RsyncArgs:    []string{"--archive", "--partial", "--info=progress2"},
+				SSHTarget:      "user@media-box",
+				SendrecvPath:   "/usr/local/bin/sendrecv",
+				RemoteRsyncPath: "/usr/local/bin/rsync",
+				RemoteDir:      "/srv/incoming",
+				Extract:        boolPtr(true),
+				RsyncArgs:      []string{"--archive", "--partial", "--info=progress2"},
 			},
 		},
 	}
@@ -137,6 +140,7 @@ func (c *Config) Render() string {
 		b.WriteString("# [hosts.laptop]\n")
 		b.WriteString("# ssh_target = \"user@laptop\"\n")
 		b.WriteString("# sendrecv_path = \"sendrecv\"\n")
+		b.WriteString("# remote_rsync_path = \"/absolute/path/to/rsync\"\n")
 		b.WriteString("# remote_dir = \"/home/user/Incoming\"\n")
 		b.WriteString("# remote_temp_dir = \"/home/user/Incoming/tmp\"\n")
 		return b.String()
@@ -156,6 +160,9 @@ func (c *Config) Render() string {
 		fmt.Fprintf(&b, "ssh_target = %s\n", quoteString(host.SSHTarget))
 		if host.SendrecvPath != "" {
 			fmt.Fprintf(&b, "sendrecv_path = %s\n", quoteString(host.SendrecvPath))
+		}
+		if host.RemoteRsyncPath != "" {
+			fmt.Fprintf(&b, "remote_rsync_path = %s\n", quoteString(host.RemoteRsyncPath))
 		}
 		fmt.Fprintf(&b, "remote_dir = %s\n", quoteString(host.RemoteDir))
 		if host.RemoteTempDir != "" {
@@ -262,6 +269,9 @@ func (c *Config) Validate() error {
 		if host.SendrecvPath != "" && validateCommandPath(host.SendrecvPath) != nil {
 			errs = append(errs, fmt.Errorf("host %q sendrecv_path must be a bare executable name or absolute path", name))
 		}
+		if host.RemoteRsyncPath != "" && validateCommandPath(host.RemoteRsyncPath) != nil {
+			errs = append(errs, fmt.Errorf("host %q remote_rsync_path must be a bare executable name or absolute path", name))
+		}
 		if !filepath.IsAbs(host.RemoteDir) {
 			errs = append(errs, fmt.Errorf("host %q remote_dir must be absolute", name))
 		}
@@ -287,14 +297,15 @@ func (c *Config) ResolveHost(name string) (*ResolvedHost, error) {
 		remoteTemp = host.RemoteTempDir
 	}
 	return &ResolvedHost{
-		Name:          name,
-		SSHTarget:     host.SSHTarget,
-		SendrecvPath:  firstNonEmpty(host.SendrecvPath, "sendrecv"),
-		RemoteDir:     host.RemoteDir,
-		RemoteTempDir: remoteTemp,
-		Extract:       extract,
-		RsyncArgs:     append(append([]string{}, c.Defaults.RsyncArgs...), host.RsyncArgs...),
-		SSHArgs:       append(append([]string{}, c.Defaults.SSHArgs...), host.SSHArgs...),
+		Name:            name,
+		SSHTarget:       host.SSHTarget,
+		SendrecvPath:    firstNonEmpty(host.SendrecvPath, "sendrecv"),
+		RemoteRsyncPath: host.RemoteRsyncPath,
+		RemoteDir:       host.RemoteDir,
+		RemoteTempDir:   remoteTemp,
+		Extract:         extract,
+		RsyncArgs:       append(append([]string{}, c.Defaults.RsyncArgs...), host.RsyncArgs...),
+		SSHArgs:         append(append([]string{}, c.Defaults.SSHArgs...), host.SSHArgs...),
 	}, nil
 }
 

@@ -31,6 +31,7 @@ remote_dir = "/home/user/Incoming"
 [hosts.server]
 ssh_target = "deploy@example"
 sendrecv_path = "/usr/local/bin/sendrecv"
+remote_rsync_path = "/usr/local/bin/rsync"
 remote_dir = "/srv/incoming"
 extract = true
 remote_temp_dir = "/tmp/sendrecv"
@@ -47,11 +48,14 @@ rsync_args = ["--archive", "--partial", "--info=progress2"]
 - `tools.*`: executable names or absolute paths for required tools
 - `hosts.<name>.ssh_target`: SSH target such as `user@host`
 - `hosts.<name>.sendrecv_path`: optional remote binary path, defaults to `sendrecv`
+- `hosts.<name>.remote_rsync_path`: optional remote rsync command or absolute path when rsync is not on the remote `PATH`
 - `hosts.<name>.remote_dir`: absolute default destination directory on the remote host
 - `hosts.<name>.remote_temp_dir`: optional per-host override for archive staging
 - `hosts.<name>.extract`: optional per-host override
 - `hosts.<name>.rsync_args`: extra host-specific rsync args
 - `hosts.<name>.ssh_args`: extra host-specific ssh args
+
+When the remote host does not expose `rsync` on its default `PATH`, set `hosts.<name>.remote_rsync_path` to the remote command or absolute path. `sendrecv` will use that value for transfers and remote capability checks.
 
 ## Init workflow
 
@@ -62,6 +66,7 @@ rsync_args = ["--archive", "--partial", "--info=progress2"]
 - You are prompted for `remote_dir` for each selected host.
 - `remote_temp_dir` defaults to `<remote_dir>/tmp` during import.
 - After selection, `sendrecv` runs best-effort remote checks and prints any warnings before writing the config.
+- If remote `rsync` is detected only at a conventional absolute path, `sendrecv config init` writes that path to `remote_rsync_path`.
 
 ## Validation rules
 
@@ -69,6 +74,7 @@ rsync_args = ["--archive", "--partial", "--info=progress2"]
 - `remote_dir` must be absolute.
 - `remote_temp_dir` must be absolute when set.
 - Tool values must be a bare executable name or an absolute path.
+- `remote_rsync_path` must be a bare executable name or an absolute path when set.
 - `sendrecv_path` must be a bare executable name or an absolute path when set.
 - Compression is fixed to `gzip` for this release.
 - Unknown config keys are rejected, including the removed `tools.tar` and `tools.xz` fields.

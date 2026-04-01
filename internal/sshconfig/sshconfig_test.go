@@ -10,9 +10,9 @@ func TestLoadImportsSimpleHosts(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config")
 	data := `
-Host linuxserver
-  HostName linuxserver
-  User cpink
+Host devbox
+  HostName devbox.example
+  User alice
 
 Host wildcard-*
   HostName ignored
@@ -35,7 +35,7 @@ Host missing-user
 	if len(hosts) != 1 {
 		t.Fatalf("expected 1 host, got %d", len(hosts))
 	}
-	if hosts[0].Alias != "linuxserver" || hosts[0].User != "cpink" || hosts[0].HostName != "linuxserver" {
+	if hosts[0].Alias != "devbox" || hosts[0].User != "alice" || hosts[0].HostName != "devbox.example" {
 		t.Fatalf("unexpected host: %+v", hosts[0])
 	}
 	if len(skipped) == 0 {

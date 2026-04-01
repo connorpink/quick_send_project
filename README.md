@@ -56,7 +56,7 @@ The local machine needs:
 - `ssh`
 - `rsync`
 
-The local machine needs `ssh` and `rsync`, and the remote machine also needs `rsync` because transfers run through remote `rsync` over SSH.
+The local machine needs `ssh` and `rsync`, and the remote machine also needs `rsync` because transfers run through remote `rsync` over SSH. If the remote host does not expose `rsync` on `PATH`, set `remote_rsync_path` for that host in the config.
 
 For archive-mode `recv`, the remote machine must also have a compatible `sendrecv` binary available on `PATH`, in a standard Homebrew location, or at the configured `sendrecv_path`.
 
@@ -86,6 +86,8 @@ These are normal CLI commands and can be called over SSH by another `sendrecv` i
 - remote `gzip`
 - `remote_dir` readiness
 - `remote_temp_dir` readiness
+
+If `remote_rsync_path` is configured, remote doctor checks that exact command/path and reports configuration-specific failures.
 
 That makes it possible to see whether the host can do raw transfers only or full archive send/recv flows.
 

@@ -12,6 +12,8 @@ go build ./cmd/sendrecv
 
 The local machine needs `ssh` and `rsync`. The remote machine also needs `rsync`.
 
+If the remote host has `rsync` installed outside its default `PATH`, set `remote_rsync_path` for that host in your config.
+
 If you want archive-mode `recv` or remote extraction for archive-mode `send`, install `sendrecv` on the remote machine as well.
 
 If remote `sendrecv` is missing, archive-mode `send` can still work:
