@@ -21,12 +21,21 @@ type Config struct {
 	Hosts    map[string]*Host `toml:"hosts"`
 }
 
+type SendTransferMode string
+
+const (
+	SendTransferModeAuto    SendTransferMode = "auto"
+	SendTransferModeRaw     SendTransferMode = "raw"
+	SendTransferModeArchive SendTransferMode = "archive"
+)
+
 type Defaults struct {
-	Extract       bool     `toml:"extract"`
-	Compression   string   `toml:"compression"`
-	RemoteTempDir string   `toml:"remote_temp_dir"`
-	RsyncArgs     []string `toml:"rsync_args"`
-	SSHArgs       []string `toml:"ssh_args"`
+	Extract          bool             `toml:"extract"`
+	SendTransferMode SendTransferMode `toml:"send_transfer_mode"`
+	Compression      string           `toml:"compression"`
+	RemoteTempDir    string           `toml:"remote_temp_dir"`
+	RsyncArgs        []string         `toml:"rsync_args"`
+	SSHArgs          []string         `toml:"ssh_args"`
 }
 
 type Tools struct {
@@ -35,26 +44,26 @@ type Tools struct {
 }
 
 type Host struct {
-	SSHTarget     string   `toml:"ssh_target"`
-	SendrecvPath  string   `toml:"sendrecv_path"`
-	RemoteRsyncPath string `toml:"remote_rsync_path"`
-	RemoteDir     string   `toml:"remote_dir"`
-	RemoteTempDir string   `toml:"remote_temp_dir"`
-	Extract       *bool    `toml:"extract"`
-	RsyncArgs     []string `toml:"rsync_args"`
-	SSHArgs       []string `toml:"ssh_args"`
+	SSHTarget       string   `toml:"ssh_target"`
+	SendrecvPath    string   `toml:"sendrecv_path"`
+	RemoteRsyncPath string   `toml:"remote_rsync_path"`
+	RemoteDir       string   `toml:"remote_dir"`
+	RemoteTempDir   string   `toml:"remote_temp_dir"`
+	Extract         *bool    `toml:"extract"`
+	RsyncArgs       []string `toml:"rsync_args"`
+	SSHArgs         []string `toml:"ssh_args"`
 }
 
 type ResolvedHost struct {
-	Name          string
-	SSHTarget     string
-	SendrecvPath  string
+	Name            string
+	SSHTarget       string
+	SendrecvPath    string
 	RemoteRsyncPath string
-	RemoteDir     string
-	RemoteTempDir string
-	Extract       bool
-	RsyncArgs     []string
-	SSHArgs       []string
+	RemoteDir       string
+	RemoteTempDir   string
+	Extract         bool
+	RsyncArgs       []string
+	SSHArgs         []string
 }
 
 func DefaultPath() (string, error) {
@@ -72,11 +81,11 @@ func Example() string {
 func DefaultConfig() *Config {
 	return &Config{
 		Defaults: Defaults{
-			Extract:       true,
-			Compression:   "gzip",
-			RemoteTempDir: DefaultRemoteTempDir,
-			RsyncArgs:     []string{"--archive", "--partial"},
-			SSHArgs:       []string{"-o", "BatchMode=yes"},
+			Extract:          true,
+			SendTransferMode: SendTransferModeAuto,
+			RemoteTempDir:    DefaultRemoteTempDir,
+			RsyncArgs:        []string{"--archive", "--partial"},
+			SSHArgs:          []string{"-o", "BatchMode=yes"},
 		},
 		Tools: Tools{
 			SSH:   "ssh",
@@ -90,12 +99,12 @@ func DefaultConfig() *Config {
 				RemoteTempDir: DefaultRemoteTempDir,
 			},
 			"media": {
-				SSHTarget:      "user@media-box",
-				SendrecvPath:   "/usr/local/bin/sendrecv",
+				SSHTarget:       "user@media-box",
+				SendrecvPath:    "/usr/local/bin/sendrecv",
 				RemoteRsyncPath: "/usr/local/bin/rsync",
-				RemoteDir:      "/srv/incoming",
-				Extract:        boolPtr(true),
-				RsyncArgs:      []string{"--archive", "--partial", "--info=progress2"},
+				RemoteDir:       "/srv/incoming",
+				Extract:         boolPtr(true),
+				RsyncArgs:       []string{"--archive", "--partial", "--info=progress2"},
 			},
 		},
 	}
@@ -104,11 +113,11 @@ func DefaultConfig() *Config {
 func MinimalConfig() *Config {
 	return &Config{
 		Defaults: Defaults{
-			Extract:       true,
-			Compression:   "gzip",
-			RemoteTempDir: DefaultRemoteTempDir,
-			RsyncArgs:     []string{"--archive", "--partial"},
-			SSHArgs:       []string{"-o", "BatchMode=yes"},
+			Extract:          true,
+			SendTransferMode: SendTransferModeAuto,
+			RemoteTempDir:    DefaultRemoteTempDir,
+			RsyncArgs:        []string{"--archive", "--partial"},
+			SSHArgs:          []string{"-o", "BatchMode=yes"},
 		},
 		Tools: Tools{
 			SSH:   "ssh",
@@ -126,7 +135,7 @@ func (c *Config) Render() string {
 	b.WriteString("# sendrecv configuration\n")
 	fmt.Fprintf(&b, "[defaults]\n")
 	fmt.Fprintf(&b, "extract = %t\n", normalized.Defaults.Extract)
-	fmt.Fprintf(&b, "compression = %s\n", quoteString(normalized.Defaults.Compression))
+	fmt.Fprintf(&b, "send_transfer_mode = %s\n", quoteString(string(normalized.Defaults.SendTransferMode)))
 	fmt.Fprintf(&b, "remote_temp_dir = %s\n", quoteString(normalized.Defaults.RemoteTempDir))
 	fmt.Fprintf(&b, "rsync_args = %s\n", renderStringList(normalized.Defaults.RsyncArgs))
 	fmt.Fprintf(&b, "ssh_args = %s\n\n", renderStringList(normalized.Defaults.SSHArgs))
@@ -241,11 +250,11 @@ func (c *Config) Validate() error {
 	if len(c.Hosts) == 0 {
 		errs = append(errs, errors.New("config must define at least one host"))
 	}
-	if c.Defaults.Compression == "" {
-		errs = append(errs, errors.New("defaults.compression is required"))
-	}
-	if c.Defaults.Compression != "gzip" {
+	if c.Defaults.Compression != "" && c.Defaults.Compression != "gzip" {
 		errs = append(errs, fmt.Errorf("unsupported defaults.compression %q", c.Defaults.Compression))
+	}
+	if !c.Defaults.SendTransferMode.Valid() {
+		errs = append(errs, fmt.Errorf("unsupported defaults.send_transfer_mode %q", c.Defaults.SendTransferMode))
 	}
 	if err := validateTool("tools.ssh", c.Tools.SSH); err != nil {
 		errs = append(errs, err)
@@ -310,8 +319,8 @@ func (c *Config) ResolveHost(name string) (*ResolvedHost, error) {
 }
 
 func (c *Config) applyDefaults() {
-	if c.Defaults.Compression == "" {
-		c.Defaults.Compression = "gzip"
+	if c.Defaults.SendTransferMode == "" {
+		c.Defaults.SendTransferMode = SendTransferModeAuto
 	}
 	if c.Defaults.RemoteTempDir == "" {
 		c.Defaults.RemoteTempDir = DefaultRemoteTempDir
@@ -327,6 +336,15 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Defaults.SSHArgs == nil {
 		c.Defaults.SSHArgs = []string{"-o", "BatchMode=yes"}
+	}
+}
+
+func (m SendTransferMode) Valid() bool {
+	switch m {
+	case SendTransferModeAuto, SendTransferModeRaw, SendTransferModeArchive:
+		return true
+	default:
+		return false
 	}
 }
 

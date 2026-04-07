@@ -14,7 +14,7 @@ You can override it with `--config` or `SENDRECV_CONFIG`.
 ```toml
 [defaults]
 extract = true
-compression = "gzip"
+send_transfer_mode = "auto"
 remote_temp_dir = "/tmp/sendrecv"
 rsync_args = ["--archive", "--partial"]
 ssh_args = ["-o", "BatchMode=yes"]
@@ -41,7 +41,7 @@ rsync_args = ["--archive", "--partial", "--info=progress2"]
 ## Fields
 
 - `defaults.extract`: default extraction behavior for send/recv archive flows
-- `defaults.compression`: must be `"gzip"` in this release
+- `defaults.send_transfer_mode`: default send behavior, one of `"auto"`, `"raw"`, or `"archive"`
 - `defaults.remote_temp_dir`: absolute remote staging directory
 - `defaults.rsync_args`: appended before transfer source and destination
 - `defaults.ssh_args`: prepended to every `ssh` call
@@ -76,8 +76,10 @@ When the remote host does not expose `rsync` on its default `PATH`, set `hosts.<
 - Tool values must be a bare executable name or an absolute path.
 - `remote_rsync_path` must be a bare executable name or an absolute path when set.
 - `sendrecv_path` must be a bare executable name or an absolute path when set.
-- Compression is fixed to `gzip` for this release.
+- `send_transfer_mode` must be one of `auto`, `raw`, or `archive`.
 - Unknown config keys are rejected, including the removed `tools.tar` and `tools.xz` fields.
+
+Legacy configs may still use `defaults.compression = "gzip"`. That value is accepted for backward compatibility and maps to `send_transfer_mode = "auto"`, but new configs should use `send_transfer_mode`.
 
 ## Remote binary requirement
 

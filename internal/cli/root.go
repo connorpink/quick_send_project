@@ -26,10 +26,16 @@ type rootOptions struct {
 }
 
 type transferFlags struct {
-	Extract      bool
-	ExtractSet   bool
-	KeepArchive  bool
-	PreserveTree bool
+	Extract           bool
+	ExtractSet        bool
+	KeepArchive       bool
+	PreserveTree      bool
+	SendMode          string
+	SendModeSet       bool
+	NoCompress        bool
+	NoCompressSet     bool
+	AllowSendMode     bool
+	ForbidKeepArchive bool
 }
 
 func NewRootCommand() *cobra.Command {
@@ -216,6 +222,8 @@ func newSendCommand(opts *rootOptions) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&remoteHost, "remote-host", "", "configured host name to use without interactive selection")
+	flags.AllowSendMode = true
+	flags.ForbidKeepArchive = true
 	attachTransferFlags(cmd, flags)
 	return cmd
 }
@@ -370,6 +378,10 @@ func attachTransferFlags(cmd *cobra.Command, flags *transferFlags) {
 	cmd.Flags().BoolVar(&flags.Extract, "extract", false, "force extraction on the destination side")
 	cmd.Flags().BoolVar(&flags.KeepArchive, "keep-archive", false, "keep the transferred archive after extraction")
 	cmd.Flags().BoolVar(&flags.PreserveTree, "preserve-tree", false, "preserve the provided path tree instead of stripping the common prefix")
+	if flags.AllowSendMode {
+		cmd.Flags().StringVar(&flags.SendMode, "transfer-mode", "", "send transfer mode: auto, raw, or archive")
+		cmd.Flags().BoolVar(&flags.NoCompress, "no-compress", false, "send with raw rsync instead of creating a local archive")
+	}
 	cmd.Flags().Bool("no-extract", false, "disable extraction on the destination side")
 	_ = cmd.Flags().Lookup("extract").NoOptDefVal
 	cmd.PreRunE = func(cmd *cobra.Command, args []string) error {
@@ -384,6 +396,28 @@ func attachTransferFlags(cmd *cobra.Command, flags *transferFlags) {
 			flags.Extract = false
 			flags.ExtractSet = true
 		}
+		if flags.AllowSendMode {
+			if cmd.Flags().Changed("transfer-mode") {
+				flags.SendModeSet = true
+				mode := config.SendTransferMode(flags.SendMode)
+				if !mode.Valid() {
+					return fmt.Errorf("unsupported --transfer-mode %q", flags.SendMode)
+				}
+			}
+			if cmd.Flags().Changed("no-compress") && flags.NoCompress {
+				flags.NoCompressSet = true
+			}
+			if flags.NoCompressSet {
+				if flags.SendModeSet && config.SendTransferMode(flags.SendMode) != config.SendTransferModeRaw {
+					return fmt.Errorf("--no-compress conflicts with --transfer-mode=%s", flags.SendMode)
+				}
+				flags.SendMode = string(config.SendTransferModeRaw)
+				flags.SendModeSet = true
+			}
+			if flags.ForbidKeepArchive && flags.SendModeSet && config.SendTransferMode(flags.SendMode) == config.SendTransferModeRaw && flags.KeepArchive {
+				return fmt.Errorf("--keep-archive cannot be used with raw send mode")
+			}
+		}
 		return nil
 	}
 }
@@ -396,6 +430,10 @@ func transferOptions(flags *transferFlags) transport.TransferOptions {
 	if flags.ExtractSet {
 		extract := flags.Extract
 		opts.Extract = &extract
+	}
+	if flags.SendModeSet {
+		mode := config.SendTransferMode(flags.SendMode)
+		opts.SendMode = &mode
 	}
 	return opts
 }

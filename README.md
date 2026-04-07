@@ -15,7 +15,8 @@ v1 currently targets macOS and Linux. Windows support and a built-in TUI are out
 - `send` and `recv` subcommands built around host presets
 - interactive host picking in `send`, with `fzf` first and Go fallback
 - TOML config with per-host defaults
-- automatic raw vs archive decision logic
+- configurable send transfer mode: `auto`, `raw`, or `archive`
+- automatic raw vs archive decision logic in `auto` mode
 - Go-native `tar.gz` archive packing and unpacking
 - optional auto-extract on the destination side
 - strip-common-prefix path mode by default
@@ -44,6 +45,8 @@ $EDITOR ~/.config/sendrecv/config.toml
 sendrecv config validate
 sendrecv hosts
 sendrecv send file.mp4
+sendrecv send --no-compress ./big-folder
+sendrecv send --transfer-mode raw ./big-folder
 sendrecv send ./dir
 sendrecv send --remote-host laptop ./dir
 sendrecv recv laptop nested/file.txt
@@ -66,6 +69,8 @@ For archive-mode `send`, remote `sendrecv` is optional:
 - if remote `sendrecv` is missing but remote `tar` and `gzip` exist, `sendrecv` falls back to shell extraction on the remote host
 - if neither extraction path is available, `sendrecv` uploads the archive directly into `remote_dir` and prints the final archive path
 - raw single-file transfers for incompressible files still work with just `ssh` and `rsync`
+
+`send` also supports `--transfer-mode auto|raw|archive`, and `--no-compress` is a shorthand for `--transfer-mode raw`. You can make that the default with `defaults.send_transfer_mode = "raw"` in config.
 
 ## Helper commands
 

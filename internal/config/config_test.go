@@ -13,7 +13,7 @@ func TestLoadAndResolveHost(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`
 [defaults]
 extract = true
-compression = "gzip"
+send_transfer_mode = "auto"
 remote_temp_dir = "/tmp/sendrecv"
 rsync_args = ["--archive"]
 ssh_args = ["-o", "BatchMode=yes"]
@@ -60,7 +60,7 @@ rsync_args = ["--info=progress2"]
 
 func TestValidateRejectsRelativeRemoteDir(t *testing.T) {
 	cfg := &Config{
-		Defaults: Defaults{Compression: "gzip", RemoteTempDir: "/tmp/sendrecv"},
+		Defaults: Defaults{SendTransferMode: SendTransferModeAuto, RemoteTempDir: "/tmp/sendrecv"},
 		Tools:    Tools{SSH: "ssh", RSync: "rsync"},
 		Hosts: map[string]*Host{
 			"bad": {SSHTarget: "u@h", RemoteDir: "relative"},
@@ -77,7 +77,7 @@ func TestLoadRejectsLegacyTarFields(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`
 [defaults]
 extract = true
-compression = "gzip"
+send_transfer_mode = "auto"
 
 [tools]
 ssh = "ssh"
@@ -115,7 +115,7 @@ func TestRenderQuotesHostKeysWhenNeeded(t *testing.T) {
 
 func TestValidateAcceptsBareRemoteRsyncPath(t *testing.T) {
 	cfg := &Config{
-		Defaults: Defaults{Compression: "gzip", RemoteTempDir: "/tmp/sendrecv"},
+		Defaults: Defaults{SendTransferMode: SendTransferModeAuto, RemoteTempDir: "/tmp/sendrecv"},
 		Tools:    Tools{SSH: "ssh", RSync: "rsync"},
 		Hosts: map[string]*Host{
 			"ok": {SSHTarget: "u@h", RemoteDir: "/srv/drop", RemoteRsyncPath: "rsync-custom"},
@@ -128,7 +128,7 @@ func TestValidateAcceptsBareRemoteRsyncPath(t *testing.T) {
 
 func TestValidateRejectsInvalidRemoteRsyncPath(t *testing.T) {
 	cfg := &Config{
-		Defaults: Defaults{Compression: "gzip", RemoteTempDir: "/tmp/sendrecv"},
+		Defaults: Defaults{SendTransferMode: SendTransferModeAuto, RemoteTempDir: "/tmp/sendrecv"},
 		Tools:    Tools{SSH: "ssh", RSync: "rsync"},
 		Hosts: map[string]*Host{
 			"bad": {SSHTarget: "u@h", RemoteDir: "/srv/drop", RemoteRsyncPath: "bin/rsync custom"},
@@ -136,5 +136,60 @@ func TestValidateRejectsInvalidRemoteRsyncPath(t *testing.T) {
 	}
 	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "remote_rsync_path") {
 		t.Fatalf("expected remote_rsync_path validation error, got %v", err)
+	}
+}
+
+func TestLoadAcceptsLegacyCompressionField(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(path, []byte(`
+[defaults]
+extract = true
+compression = "gzip"
+remote_temp_dir = "/tmp/sendrecv"
+
+[tools]
+ssh = "ssh"
+rsync = "rsync"
+
+[hosts.dev]
+ssh_target = "user@dev"
+remote_dir = "/srv/drop"
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Defaults.SendTransferMode != SendTransferModeAuto {
+		t.Fatalf("expected legacy compression to map to auto mode, got %q", cfg.Defaults.SendTransferMode)
+	}
+}
+
+func TestValidateRejectsUnknownSendTransferMode(t *testing.T) {
+	cfg := &Config{
+		Defaults: Defaults{SendTransferMode: SendTransferMode("fast"), RemoteTempDir: "/tmp/sendrecv"},
+		Tools:    Tools{SSH: "ssh", RSync: "rsync"},
+		Hosts: map[string]*Host{
+			"ok": {SSHTarget: "u@h", RemoteDir: "/srv/drop"},
+		},
+	}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "send_transfer_mode") {
+		t.Fatalf("expected send_transfer_mode validation error, got %v", err)
+	}
+}
+
+func TestRenderWritesSendTransferMode(t *testing.T) {
+	cfg := MinimalConfig()
+	cfg.Hosts["dev"] = &Host{SSHTarget: "user@dev", RemoteDir: "/srv/drop"}
+
+	rendered := cfg.Render()
+	if !strings.Contains(rendered, `send_transfer_mode = "auto"`) {
+		t.Fatalf("expected send_transfer_mode in rendered config, got:\n%s", rendered)
+	}
+	if strings.Contains(rendered, `compression = "gzip"`) {
+		t.Fatalf("did not expect legacy compression field in rendered config, got:\n%s", rendered)
 	}
 }

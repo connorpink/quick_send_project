@@ -32,6 +32,115 @@ func TestSendPlanForRawFile(t *testing.T) {
 	}
 }
 
+func TestSendPlanRawModeSendsDirectoryWithoutArchive(t *testing.T) {
+	dir := t.TempDir()
+	sourceDir := filepath.Join(dir, "photos")
+	if err := os.MkdirAll(filepath.Join(sourceDir, "nested"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sourceDir, "nested", "img.jpg"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := testConfig()
+	host, _ := cfg.ResolveHost("box")
+	mode := config.SendTransferModeRaw
+	runner := Runner{Config: cfg}
+	plan, err := runner.SendPlan(host, []string{sourceDir}, TransferOptions{SendMode: &mode})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, operation := range plan.Operations {
+		display := operation.Display()
+		if strings.Contains(display, "sendrecv pack") || strings.Contains(display, "sendrecv-transfer.tar.gz") {
+			t.Fatalf("did not expect archive operations in raw mode, got %s", display)
+		}
+	}
+	if got := plan.Summary; !strings.Contains(got, "forces raw") {
+		t.Fatalf("unexpected summary: %s", got)
+	}
+}
+
+func TestSendPlanRawModeSendsMultiplePathsWithoutArchive(t *testing.T) {
+	dir := t.TempDir()
+	first := filepath.Join(dir, "one.txt")
+	secondDir := filepath.Join(dir, "nested")
+	second := filepath.Join(secondDir, "two.txt")
+	if err := os.WriteFile(first, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(secondDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(second, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := testConfig()
+	host, _ := cfg.ResolveHost("box")
+	mode := config.SendTransferModeRaw
+	runner := Runner{Config: cfg}
+	plan, err := runner.SendPlan(host, []string{first, second}, TransferOptions{SendMode: &mode})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len(plan.Operations); got != 4 {
+		t.Fatalf("expected mkdir+rsync per path, got %d operations", got)
+	}
+	for _, operation := range plan.Operations {
+		if strings.Contains(operation.Display(), "sendrecv-transfer.tar.gz") {
+			t.Fatalf("did not expect archive path in raw multi-path mode: %s", operation.Display())
+		}
+	}
+}
+
+func TestSendPlanArchiveModeForcesArchiveForIncompressibleFile(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "video.mp4")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := testConfig()
+	host, _ := cfg.ResolveHost("box")
+	mode := config.SendTransferModeArchive
+	runner := Runner{
+		Config: cfg,
+		Exec:   ExecOptions{DryRun: true},
+	}
+	plan, err := runner.SendPlan(host, []string{file}, TransferOptions{SendMode: &mode})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var foundPack bool
+	for _, operation := range plan.Operations {
+		if strings.Contains(operation.Display(), "sendrecv pack") {
+			foundPack = true
+			break
+		}
+	}
+	if !foundPack {
+		t.Fatalf("expected archive mode to force pack operation")
+	}
+}
+
+func TestSendPlanRawModeNotesIgnoredExtractFlags(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "file.txt")
+	if err := os.WriteFile(file, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := testConfig()
+	host, _ := cfg.ResolveHost("box")
+	mode := config.SendTransferModeRaw
+	extract := true
+	runner := Runner{Config: cfg}
+	plan, err := runner.SendPlan(host, []string{file}, TransferOptions{SendMode: &mode, Extract: &extract})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := plan.Operations[0].Display(); !strings.Contains(got, "ignored in raw send mode") {
+		t.Fatalf("expected raw mode extract note, got %s", got)
+	}
+}
+
 func TestSendPlanAddsRemoteRsyncPathWhenConfigured(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "video.mp4")
@@ -268,11 +377,11 @@ func TestSendPlanUsesResolvedRemoteSendrecvPath(t *testing.T) {
 func testConfig() *config.Config {
 	return &config.Config{
 		Defaults: config.Defaults{
-			Extract:       true,
-			Compression:   "gzip",
-			RemoteTempDir: "/tmp/sendrecv",
-			RsyncArgs:     []string{"--archive"},
-			SSHArgs:       []string{"-o", "BatchMode=yes"},
+			Extract:          true,
+			SendTransferMode: config.SendTransferModeAuto,
+			RemoteTempDir:    "/tmp/sendrecv",
+			RsyncArgs:        []string{"--archive"},
+			SSHArgs:          []string{"-o", "BatchMode=yes"},
 		},
 		Tools: config.Tools{SSH: "ssh", RSync: "rsync"},
 		Hosts: map[string]*config.Host{

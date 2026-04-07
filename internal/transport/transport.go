@@ -29,6 +29,7 @@ type TransferOptions struct {
 	Extract      *bool
 	KeepArchive  bool
 	PreserveTree bool
+	SendMode     *config.SendTransferMode
 }
 
 type Plan struct {
@@ -167,16 +168,33 @@ func (r Runner) SendPlan(host *config.ResolvedHost, paths []string, opts Transfe
 	if err != nil {
 		return nil, err
 	}
+	sendMode := r.Config.Defaults.SendTransferMode
+	if opts.SendMode != nil {
+		sendMode = *opts.SendMode
+	}
 	decision, err := archive.Decide(paths)
 	if err != nil {
 		return nil, err
+	}
+	switch sendMode {
+	case config.SendTransferModeRaw:
+		decision = archive.Decision{Mode: archive.ModeRaw, Compressed: false, Reason: "send transfer mode forces raw rsync transfer"}
+	case config.SendTransferModeArchive:
+		decision = archive.Decision{Mode: archive.ModeArchive, Compressed: true, Reason: "send transfer mode forces archive transfer"}
 	}
 	extract := host.Extract
 	if opts.Extract != nil {
 		extract = *opts.Extract
 	}
 	if decision.Mode == archive.ModeRaw {
-		return r.rawSendPlan(host, mappings), nil
+		plan := r.rawSendPlan(host, mappings)
+		plan.Summary = decision.Reason
+		if opts.Extract != nil {
+			plan.Operations = append([]Operation{
+				MessageOperation{Message: "note: extraction flags are ignored in raw send mode"},
+			}, plan.Operations...)
+		}
+		return plan, nil
 	}
 
 	members := make([]string, 0, len(mappings))

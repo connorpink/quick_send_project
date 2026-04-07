@@ -1,6 +1,6 @@
 [defaults]
 extract = true
-compression = "gzip"
+send_transfer_mode = "auto"
 remote_temp_dir = "/tmp/sendrecv"
 rsync_args = ["--archive", "--partial"]
 ssh_args = ["-o", "BatchMode=yes"]
