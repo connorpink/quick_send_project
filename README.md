@@ -25,6 +25,8 @@ v1 currently targets macOS and Linux. Windows support and a built-in TUI are out
 - `doctor` checks for required tooling
 - documented Yazi integration, including the companion plugin
 
+![help command](./Images/help_command.png)
+
 ## Install
 
 See [docs/install.md](./docs/install.md).
@@ -95,7 +97,6 @@ These are normal CLI commands and can be called over SSH by another `sendrecv` i
 If `remote_rsync_path` is configured, remote doctor checks that exact command/path and reports configuration-specific failures.
 
 That makes it possible to see whether the host can do raw transfers only or full archive send/recv flows.
-
 
 ## Config
 
